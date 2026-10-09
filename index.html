@@ -1,0 +1,918 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Create Voice Assistant · AI builder demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,600&family=Geist:wght@400;500;600&family=Geist+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#16151D; --muted:#5A5870; --faint:#6F6D85; --line:#E3E1EE; --line2:#CBC8DC; --soft:#F7F6FC;
+  --acc:#6B54E3; --accd:#5340C9; --tint:#EFECFD; --vbg:#F4F2FF; --vline:#DDD8F7;
+  --ok:#0B6B5C; --oktint:#E3F4EF; --warn:#8A5A00; --warntint:#FFF1CC; --bad:#B42318;
+  --glow:0 0 0 4px rgba(107,84,227,.16),0 0 28px rgba(107,84,227,.24);
+  --sans:'Geist',system-ui,-apple-system,'Segoe UI',sans-serif; --disp:'Bricolage Grotesque','Geist',system-ui,sans-serif; --mono:'Geist Mono',ui-monospace,Menlo,monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{font-family:var(--sans);color:var(--ink);background:#F1F0F6;overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--acc);outline-offset:2px}
+[hidden]{display:none !important}
+::placeholder{color:var(--faint)}
+
+/* page behind the modal */
+.page{height:100%;padding:36px 48px;display:flex;flex-direction:column;gap:28px}
+.pageHead{display:flex;justify-content:space-between;align-items:center}
+.pageHead h1{font-family:var(--disp);font-size:30px;margin:0;letter-spacing:-.02em}
+.pageHead p{margin:4px 0 0;color:var(--muted);font-size:15px}
+.tiles{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px}
+.tile{background:#fff;border:1px solid var(--line);border-radius:16px;padding:22px;display:flex;flex-direction:column;gap:12px;min-height:170px}
+.sk{height:12px;border-radius:6px;background:#ECEAF3}
+.empty{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;color:var(--muted);font-size:15px}
+
+.btn{height:46px;padding:0 18px;border-radius:12px;border:1px solid var(--line2);background:#fff;font-size:14px;font-weight:500;display:inline-flex;align-items:center;justify-content:center;gap:8px;transition:box-shadow .3s,transform .15s,background .2s}
+.btn.pri{background:var(--acc);border-color:var(--acc);color:#fff;font-weight:600}
+.btn.out{border-color:var(--acc);color:var(--accd);font-weight:600}
+.btn.big{height:54px;font-size:16px;border-radius:14px;padding:0 24px}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn.pressing{box-shadow:var(--glow);transform:scale(.97)}
+.btn.cue{box-shadow:0 0 0 4px rgba(107,84,227,.2),0 0 32px rgba(107,84,227,.45)}
+.btn svg{width:18px;height:18px;flex:none}
+
+/* modal */
+#overlay{position:fixed;inset:0;background:rgba(22,21,29,.42);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s}
+#overlay.on{opacity:1;pointer-events:auto}
+#fit{transform-origin:center center}
+#card{height:800px;display:flex;background:#fff;border-radius:22px;overflow:hidden;box-shadow:0 40px 90px -30px rgba(22,21,29,.55);position:relative}
+
+/* voice column */
+#voice{width:400px;flex:none;background:var(--vbg);padding:26px 28px;display:flex;flex-direction:column;gap:12px;position:relative}
+#card.open #voice{border-right:1px solid var(--vline)}
+.vTop{display:flex;justify-content:space-between;align-items:center}
+.cap{font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.pill{display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;border-radius:14px;background:#fff;border:1px solid var(--line2);font-size:13px;font-weight:500;color:var(--muted)}
+.pill i{width:7px;height:7px;border-radius:50%;background:currentColor}
+.pill.live{color:var(--accd);border-color:#B9AEF3}
+.pill.speak{color:var(--accd);border-color:var(--acc)}
+.stage{position:relative;height:288px;display:flex;align-items:center;justify-content:center}
+.halo{position:absolute;width:310px;height:310px;border-radius:50%;background:radial-gradient(circle,rgba(107,84,227,.45) 0%,rgba(107,84,227,0) 68%);opacity:0;transition:opacity .5s}
+.orb{display:grid;grid-template-columns:repeat(11,24px);grid-auto-rows:24px;position:relative;transition:filter .45s}
+.orb span{display:flex;align-items:center;justify-content:center}
+.orb b{display:block;border-radius:50%;background:var(--acc);opacity:.3;transition:opacity .45s}
+.stage.speak .halo{opacity:1;animation:halo 1.1s ease-in-out infinite}
+.stage.listen .halo{opacity:.3}
+.stage.speak .orb{filter:drop-shadow(0 0 12px rgba(107,84,227,.9)) drop-shadow(0 0 40px rgba(107,84,227,.5))}
+.stage.listen .orb{filter:drop-shadow(0 0 8px rgba(107,84,227,.35))}
+.stage.speak .orb b{opacity:1;animation:spk 1.1s ease-in-out infinite}
+.stage.listen .orb b{opacity:.75;animation:lsn 2.8s ease-in-out infinite}
+.stage.work .orb b{opacity:.6;animation:lsn 1.4s ease-in-out infinite}
+@keyframes spk{0%,100%{transform:scale(.55)}45%{transform:scale(1.28)}}
+@keyframes lsn{0%,100%{transform:scale(.82)}50%{transform:scale(1)}}
+@keyframes halo{0%,100%{transform:scale(.9)}50%{transform:scale(1.1)}}
+#q{margin:0;min-height:120px;font-family:var(--disp);font-size:22px;line-height:30px;font-weight:500;letter-spacing:-.01em;text-align:center}
+.you{border-top:1px solid var(--vline);padding-top:12px;min-height:84px;display:flex;flex-direction:column;gap:4px}
+.you p{margin:0;font-size:15px;line-height:22px}
+.you p.ph{color:var(--faint)}
+.grow{flex:1}
+.introBtns{display:flex;flex-direction:column;gap:10px}
+.ctrls{display:grid;grid-template-columns:1fr 1fr 48px;gap:10px}
+.ctrls .btn{height:48px;padding:0 10px}
+.hint{margin:0;font-size:13px;line-height:18px;color:var(--muted);text-align:center}
+#card:not(.open) .ctrls,#card:not(.open) #hint{display:none}
+
+/* form pane */
+#formPane{width:0;position:relative;overflow:hidden;transition:width .7s cubic-bezier(.2,.8,.2,1)}
+#card.open #formPane{width:800px}
+.formInner{width:800px;height:100%;display:flex;flex-direction:column;opacity:0;transition:opacity .45s .25s}
+#card.open .formInner{opacity:1}
+.fHead{padding:22px 28px 16px;display:flex;justify-content:space-between;align-items:flex-start;gap:16px}
+.fHead .who{display:flex;gap:14px;align-items:center}
+.logo{width:44px;height:44px;border-radius:12px;background:var(--tint);color:var(--accd);display:flex;align-items:center;justify-content:center;flex:none}
+.fHead h2{margin:0;font-family:var(--disp);font-size:22px;line-height:28px;letter-spacing:-.01em}
+.fHead p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.x{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--muted);display:flex;align-items:center;justify-content:center;flex:none}
+.tabs{display:flex;gap:4px;padding:0 28px;border-bottom:1px solid var(--line)}
+.tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;cursor:pointer;height:46px;padding:0 14px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--muted);margin-bottom:-1px}
+.tab.on{color:var(--accd);font-weight:600;border-bottom:2px solid var(--acc)}
+.tab:hover{color:var(--ink)}
+.tab.done{color:#3F3D52}
+.tag{height:20px;padding:0 7px;border-radius:6px;background:#EFEEF5;color:#3F3D52;font-family:var(--mono);font-size:11px;display:inline-flex;align-items:center;font-weight:500}
+.tag.acc{background:var(--tint);color:var(--accd)} .tag.ok{background:var(--oktint);color:var(--ok)} .tag.warn{background:var(--warntint);color:var(--warn)}
+#body{flex:1;min-height:0;overflow-y:auto;padding:22px 28px;scroll-behavior:smooth}
+.st{display:flex;flex-direction:column;gap:18px}
+.box{border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px}
+.box h3{margin:0;font-size:13px;line-height:18px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
+.box .sub{margin:-12px 0 0;font-size:13px;color:var(--muted)}
+.grid2{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px}
+.field{display:flex;flex-direction:column;gap:7px;scroll-margin:120px}
+.lab{display:flex;justify-content:space-between;align-items:center;gap:8px;min-height:22px;font-size:14px;font-weight:500}
+.lab i{color:var(--bad);font-style:normal} .lab small{font-weight:400;color:var(--muted);font-size:14px}
+.badge{display:none;height:22px;padding:0 9px;border-radius:11px;font-size:12px;font-weight:600;align-items:center;white-space:nowrap}
+.field.is-active .badge{display:flex;background:var(--tint);color:var(--accd)}
+.field.is-done .badge{display:flex;background:#EFEEF5;color:#3F3D52}
+.ctl{height:46px;width:100%;border:1px solid var(--line2);border-radius:12px;padding:0 14px;font-size:15px;background:#fff;transition:box-shadow .25s,border-color .25s}
+select.ctl{padding:0 10px}
+textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:block}
+.group{border:1px solid var(--line2);border-radius:12px;transition:box-shadow .25s,border-color .25s}
+.field.is-active .ctl,.field.is-active .group{border-color:var(--acc);box-shadow:var(--glow)}
+.seg{display:inline-flex;gap:4px;padding:4px;background:var(--soft)}
+.seg button{height:42px;padding:0 22px;border:none;border-radius:9px;background:transparent;font-size:15px;font-weight:500}
+.seg button.on{background:var(--acc);color:#fff}
+.note{font-size:13px;color:var(--muted);margin:0}
+.chips{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.chip{height:44px;padding:0 12px;border-radius:10px;border:1px solid var(--line2);background:#fff;font-size:13px;font-weight:500;display:inline-flex;align-items:center;gap:8px;animation:pop .35s both}
+.chip.on{border-color:var(--acc);background:var(--vbg);color:var(--accd)}
+.chip .mono{font-family:var(--mono)}
+@keyframes pop{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:none}}
+.drop{border:1px dashed #8D8AA3;border-radius:12px;padding:18px;display:flex;align-items:center;gap:14px;background:#fff;width:100%;text-align:left;transition:box-shadow .25s,border-color .25s}
+.drop.tall{flex-direction:column;text-align:center;padding:56px 20px;gap:10px}
+.drop b{display:block;font-size:15px} .drop small{color:var(--muted);font-size:13px}
+.field.is-active .drop{border-color:var(--acc);box-shadow:var(--glow)}
+.files{display:flex;flex-direction:column;gap:8px}
+.file{display:flex;align-items:center;gap:10px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;font-size:13px;animation:pop .35s both}
+.file .mono{font-family:var(--mono);flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.file .pb{width:90px;height:6px;border-radius:3px;background:#ECEAF3;overflow:hidden}
+.file .pb i{display:block;height:100%;width:0;background:var(--acc);transition:width .9s ease}
+.fFoot{padding:14px 28px;border-top:1px solid var(--line);display:flex;justify-content:space-between;align-items:center;gap:12px}
+.fFoot .msg{font-size:13px;font-weight:500;color:var(--warn)} .fFoot .msg.ok{color:var(--ok)}
+.fFoot .acts{display:flex;gap:10px}
+
+/* popups */
+#pop{position:absolute;inset:0;background:rgba(244,242,255,.82);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;opacity:0;pointer-events:none;transition:opacity .3s;z-index:5}
+#pop.on{opacity:1;pointer-events:auto}
+.popCard{width:620px;max-height:700px;overflow:auto;background:#fff;border:1px solid var(--vline);border-radius:18px;padding:24px;box-shadow:0 30px 60px -28px rgba(22,21,29,.45);display:flex;flex-direction:column;gap:16px;transform:translateY(10px);transition:transform .3s}
+#pop.on .popCard{transform:none}
+.popHead{display:flex;gap:14px;align-items:center}
+.popHead h3{margin:0;font-family:var(--disp);font-size:20px;letter-spacing:-.01em}
+.popHead p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.spin{width:36px;height:36px;border-radius:50%;border:3px solid var(--tint);border-top-color:var(--acc);animation:rot .8s linear infinite;flex:none}
+.spin.done{animation:none;border-color:var(--ok);background:var(--oktint);position:relative}
+.spin.done:after{content:"";position:absolute;left:11px;top:6px;width:8px;height:15px;border:solid var(--ok);border-width:0 3px 3px 0;transform:rotate(45deg)}
+@keyframes rot{to{transform:rotate(360deg)}}
+.rows{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:6px}
+.rows li{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:10px;background:var(--soft);font-size:14px;opacity:.55;transition:opacity .3s,background .3s}
+.rows li.run,.rows li.ok,.rows li.miss{opacity:1}
+.rows li.run{background:var(--tint)}
+.rows li .ic{width:18px;height:18px;border-radius:50%;border:2px solid var(--line2);flex:none;position:relative}
+.rows li.run .ic{border-color:var(--tint);border-top-color:var(--acc);animation:rot .7s linear infinite}
+.rows li.ok .ic{border-color:var(--ok);background:var(--ok)}
+.rows li.ok .ic:after{content:"";position:absolute;left:4px;top:1px;width:4px;height:8px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+.rows li.miss .ic{border-color:var(--warn);background:var(--warntint)}
+.rows li .t{flex:1;display:flex;flex-direction:column;gap:1px}
+.rows li .t b{font-weight:500} .rows li .t small{font-size:12px;color:var(--muted);min-height:15px}
+.rows li em{font-style:normal;font-family:var(--mono);font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em}
+.rows li.ok em{color:var(--ok)} .rows li.miss em{color:var(--warn)} .rows li.run em{color:var(--accd)}
+.bar{height:6px;border-radius:3px;background:#ECEAF3;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--acc);transition:width .5s ease}
+.sim{border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:flex;flex-direction:column;gap:6px;font-size:13px;line-height:19px;min-height:96px}
+.sim p{margin:0;animation:pop .3s both} .sim b{font-weight:600}
+.popFoot{display:flex;justify-content:flex-end;gap:10px}
+
+/* result */
+.rowBetween{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
+.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
+.stat{padding:10px 12px;border-radius:10px;background:var(--soft);display:flex;flex-direction:column;gap:2px}
+.stat span{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
+.stat b{font-family:var(--mono);font-size:15px;font-weight:500}
+#prompt{font-family:var(--mono);font-size:13px;line-height:20px;height:230px;background:var(--soft);border-color:var(--line)}
+#prompt.edit{background:#fff;border-color:var(--acc)}
+.banner{display:flex;align-items:center;gap:12px;padding:12px 14px;border-radius:12px;background:var(--tint);border:1px solid var(--vline);font-size:13px;line-height:19px}
+.an{border:1px solid var(--line);border-radius:12px;padding:14px 14px 14px 16px;display:grid;grid-template-columns:220px 1fr 44px;gap:12px 14px;align-items:end;animation:pop .3s both}
+.an label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:500;color:var(--muted)}
+.an .ctl{height:44px;font-size:14px;border-radius:10px;color:var(--ink)}
+.an .nm{font-family:var(--mono);font-size:13px}
+.an .ty{grid-column:1}
+.an button{width:44px;height:44px;border-radius:10px;border:none;background:transparent;color:var(--muted);display:flex;align-items:center;justify-content:center;grid-column:3;grid-row:1;align-self:start}
+
+/* success */
+#done{position:absolute;inset:0;background:rgba(255,255,255,.94);z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .35s}
+#done.on{opacity:1;pointer-events:auto}
+#done .ring{width:84px;height:84px;border-radius:50%;background:var(--oktint);display:flex;align-items:center;justify-content:center;color:var(--ok);box-shadow:0 0 0 10px rgba(11,107,92,.08)}
+#done h3{font-family:var(--disp);font-size:30px;margin:6px 0 0;letter-spacing:-.02em}
+#done p{margin:0;color:var(--muted);font-size:15px}
+
+.talk{display:flex;gap:8px;align-items:center}
+.talk .ctl{height:46px;flex:1;min-width:0}
+.mic{width:46px;height:46px;flex:none;border-radius:12px;border:1px solid var(--line2);background:#fff;color:var(--muted);display:flex;align-items:center;justify-content:center}
+.mic.on{background:var(--acc);border-color:var(--acc);color:#fff;box-shadow:var(--glow)}
+#toast{position:fixed;top:16px;left:50%;transform:translate(-50%,-90px);background:var(--ink);color:#fff;padding:11px 16px;border-radius:12px;font-size:14px;z-index:30;transition:transform .35s;max-width:90vw}
+#toast.on{transform:translate(-50%,0)}
+.page{overflow:auto}
+.tile h4{margin:0;font-family:var(--disp);font-size:19px;letter-spacing:-.01em}
+.tile .meta{font-size:13px;color:var(--muted)} .tile .mono{font-family:var(--mono);font-size:13px}
+.tile summary{font-size:13px;font-weight:500;cursor:pointer;color:var(--accd);min-height:28px}
+.tile pre{white-space:pre-wrap;max-height:220px;overflow:auto;font-family:var(--mono);font-size:12px;line-height:18px;background:var(--soft);padding:10px;border-radius:10px;margin:8px 0 0}
+.tile .btn{height:44px}
+/* demo bar */
+#demo{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:6px;border-radius:14px;background:rgba(22,21,29,.86);color:#fff;font-size:12px;z-index:20}
+#demo span{padding:0 8px;font-family:var(--mono);letter-spacing:.06em;text-transform:uppercase;opacity:.7}
+#demo button{height:32px;padding:0 10px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:transparent;color:#fff;font-size:12px}
+#demo button.on{background:#fff;color:var(--ink);border-color:#fff}
+#demo select{height:32px;max-width:190px;border-radius:9px;border:1px solid rgba(255,255,255,.25);background:#2a2932;color:#fff;font-size:12px;padding:0 6px}
+#demo em{font-style:normal;padding:0 8px;font-size:12px}
+#demo em.ok{color:#7be0c3} #demo em.bad{color:#ffc46b}
+@media (prefers-reduced-motion: reduce){*{animation-duration:.01ms !important;transition-duration:.01ms !important}}
+</style>
+</head>
+<body>
+
+<div class="page">
+  <div class="pageHead">
+    <div><h1>Assistants</h1><p>Your AI voice assistants for campaigns.</p></div>
+    <button class="btn pri big" id="createBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+      Create Assistant
+    </button>
+  </div>
+  <div class="tiles" id="dash"></div>
+  <div class="empty" id="dashEmpty"><span>No assistants yet. Press <b>Create Assistant</b> to start the voice-guided setup.</span></div>
+</div>
+
+<div id="overlay" role="dialog" aria-modal="true" aria-label="Create Voice Assistant">
+ <div id="fit">
+  <div id="card">
+
+   <section id="voice" aria-label="Voice builder">
+     <div class="vTop">
+       <span class="cap">AI builder</span>
+       <span class="pill" id="pill"><i></i><span id="pillT">Ready</span></span>
+     </div>
+     <div class="stage" id="stage"><span class="halo"></span><div class="orb" id="orb" aria-hidden="true"></div></div>
+     <p id="q" aria-live="polite"></p>
+     <div class="you"><span class="cap">You</span><p id="you" class="ph">Your answer shows up here as you speak.</p></div>
+     <div class="talk" id="talk" hidden>
+       <button class="mic" id="micBtn" aria-label="Microphone on or off"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
+       <input class="ctl" id="sayBox" aria-label="Type your answer" placeholder="Type your answer" autocomplete="off">
+       <button class="btn pri" id="sendBtn">Send</button>
+     </div>
+     <div class="grow"></div>
+     <div class="introBtns" id="introBtns">
+       <button class="btn pri big" id="introBot">Build it for me</button>
+       <button class="btn big" id="introManual">I'll build manually</button>
+     </div>
+     <div class="ctrls">
+       <button class="btn" id="playBtn"></button>
+       <button class="btn" id="redoBtn">
+         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12a8 8 0 1 0 2.6-5.9M4 4v5h5"/></svg>Restart step
+       </button>
+       <button class="btn" id="sndBtn" aria-label="Toggle bot sound"></button>
+     </div>
+     <p class="hint" id="hint">Pause any time to fill the form yourself. Press play and I pick up where you left off.</p>
+   </section>
+
+   <section id="formPane">
+    <div class="formInner">
+      <div class="fHead">
+        <div class="who">
+          <span class="logo"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="11" rx="3"/><path d="M12 8V4M9 13v2M15 13v2M2 13v2M22 13v2"/></svg></span>
+          <div><h2>Create Voice Assistant</h2><p>Basics, then the system prompt, then the generated prompt and analytics.</p></div>
+        </div>
+        <button class="x" id="closeBtn" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
+      </div>
+      <div class="tabs">
+        <button class="tab" id="tab1">1. Basics</button>
+        <button class="tab" id="tab2">2. System prompt <span class="tag acc" id="tab2tag">Required</span></button>
+        <button class="tab" id="tab3">3. Prompt and analytics</button>
+      </div>
+
+      <div id="body">
+        <!-- CARD 1 -->
+        <div class="st" id="st-basics">
+          <div class="box">
+            <h3>Assistant identity and contact line</h3>
+            <div class="grid2">
+              <div class="field" id="f-name"><div class="lab"><label for="i-name">Assistant name <i>*</i></label><span class="badge"></span></div>
+                <input class="ctl" id="i-name" placeholder="e.g. Sales Support"></div>
+              <div class="field" id="f-phone"><div class="lab"><label for="i-phone">Phone number <i>*</i></label><span class="badge"></span></div>
+                <select class="ctl" id="i-phone"><option value="">Choose a number</option></select></div>
+            </div>
+            <div id="phoneSug" hidden>
+              <div class="chips"><span class="cap">Suggested by AI</span><span id="phoneChips" class="chips"></span></div>
+            </div>
+          </div>
+          <div class="box">
+            <h3>Voice</h3>
+            <div class="field" id="f-mode"><div class="lab"><span>Voice mode <i>*</i></span><span class="badge"></span></div>
+              <div><div class="group seg" role="group" aria-label="Voice mode"><button id="m-standard">Standard</button><button id="m-premium">Premium</button></div></div>
+              <p class="note" id="modeNote">Pick a mode to see its voices.</p></div>
+            <div class="field" id="f-voice"><div class="lab"><label for="i-voice">Select voice <i>*</i></label><span class="badge"></span></div>
+              <select class="ctl" id="i-voice"><option value="">Choose a mode first</option></select></div>
+          </div>
+          <div class="box" id="f-source" style="scroll-margin:120px">
+            <h3>System prompt</h3>
+            <p class="sub">Bring your own, or let the AI write it with you.</p>
+            <div class="grid2">
+              <button class="btn big" id="srcUp"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>Upload system prompt</button>
+              <button class="btn pri big" id="srcGen"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16v4M17 18h4"/></svg>Generate with AI</button>
+            </div>
+          </div>
+        </div>
+
+        <!-- CARD 2 : upload -->
+        <div class="st" id="st-upload" hidden>
+          <div class="box">
+            <h3>Upload system prompt</h3>
+            <div class="field" id="f-up"><div class="lab"><span>System prompt file <i>*</i></span><span class="badge"></span></div>
+              <button class="drop tall" id="upDrop">
+                <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="#5A5870" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+                <span><b>Drop your system prompt here</b><small>.md, .txt or .json · click to choose a file</small></span>
+              </button>
+              <div class="files" id="upFiles"></div></div>
+          </div>
+        </div>
+
+        <!-- CARD 2 : generate -->
+        <div class="st" id="st-details" hidden>
+          <div class="box">
+            <h3>Business and agent details</h3>
+            <div class="grid2">
+              <div class="field" id="f-company"><div class="lab"><label for="i-company">Company name <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-company" placeholder="AI will ask about this"></div>
+              <div class="field" id="f-industry"><div class="lab"><label for="i-industry">Domain or industry <i>*</i></label><span class="badge"></span></div>
+                <select class="ctl" id="i-industry"><option value="">Choose an industry</option><option>Healthcare &amp; Clinics</option><option>Retail &amp; E-commerce</option><option>Real Estate</option><option>Education</option><option>Financial Services</option></select></div>
+              <div class="field" id="f-agent"><div class="lab"><label for="i-agent">Agent name <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-agent" placeholder="AI will ask about this"></div>
+              <div class="field" id="f-role"><div class="lab"><label for="i-role">Agent role <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-role" placeholder="AI will ask about this"></div>
+            </div>
+            <div class="field" id="f-goal"><div class="lab"><label for="i-goal">Agent goal <i>*</i></label><span class="badge"></span></div><textarea class="ctl" id="i-goal" rows="3" placeholder="AI will ask about this"></textarea></div>
+            <div class="grid2">
+              <div class="field" id="f-language"><div class="lab"><label for="i-language">Language requirements <i>*</i></label><span class="badge"></span></div>
+                <select class="ctl" id="i-language"><option value="">Choose a language</option><option>English (Neutral / Indian / US)</option><option>Hindi</option><option>English and Hindi</option></select></div>
+              <div class="field" id="f-tone"><div class="lab"><label for="i-tone">Agent tone <i>*</i></label><span class="badge"></span></div>
+                <select class="ctl" id="i-tone"><option value="">Choose a tone</option><option>Warm &amp; Welcoming</option><option>Professional</option><option>Energetic</option><option>Calm</option></select></div>
+            </div>
+            <div class="field" id="f-docs"><div class="lab"><span>Documents <small>(product items, price lists, FAQs)</small></span><span class="badge"></span></div>
+              <button class="drop" id="docDrop">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5A5870" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
+                <span><b>Upload company documents</b><small>PDF, DOCX or TXT · the agent answers from these</small></span>
+              </button>
+              <div class="files" id="docFiles"></div></div>
+            <div class="field" id="f-guide"><div class="lab"><label for="i-guide">Guidelines or restrictions <small>(optional)</small></label><span class="badge"></span></div><textarea class="ctl" id="i-guide" rows="2" placeholder="Anything the agent must always or never do"></textarea></div>
+          </div>
+          <div class="box" id="extraBox" hidden>
+            <div class="rowBetween"><h3>Additional details</h3><span class="tag acc">Added by AI after analysis</span></div>
+            <div class="grid2" id="extraGrid"></div>
+          </div>
+          <button class="btn pri big" id="genBtn" style="width:100%"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l1.8 5.2L19 10l-5.2 1.8L12 17l-1.8-5.2L5 10l5.2-1.8zM19 16v4M17 18h4"/></svg>Generate Prompt</button>
+        </div>
+
+        <!-- CARD 3 -->
+        <div class="st" id="st-result" hidden>
+          <div class="box">
+            <div class="rowBetween">
+              <div class="chips"><h3>Generated prompt</h3><span class="tag acc" id="resMode">Standard</span><span class="tag ok">Validated</span><span class="tag ok">Simulated</span></div>
+              <div class="chips">
+                <button class="btn" id="editBtn">Edit prompt</button>
+                <button class="btn" id="regenBtn">Regenerate</button>
+                <button class="btn" id="dlBtn" aria-label="Download prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></button>
+              </div>
+            </div>
+            <div class="stats">
+              <div class="stat"><span>Words</span><b id="sWords">0</b></div>
+              <div class="stat"><span>Tokens</span><b id="sTok">0</b></div>
+              <div class="stat"><span>Example calls</span><b id="sCalls">3 / 3</b></div>
+              <div class="stat"><span>Score</span><b id="sScore">[SCORE]</b></div>
+            </div>
+            <textarea class="ctl" id="prompt" readonly aria-label="Generated prompt" placeholder="No prompt yet. Generate or upload one in step 2 and it appears here."></textarea>
+          </div>
+          <div class="box">
+            <div class="rowBetween">
+              <div class="chips"><h3>Analytics fields</h3><span class="tag acc" id="anCount">0 fields</span></div>
+              <button class="btn" id="anAdd">+ Add Field</button>
+            </div>
+            <div class="banner"><span><b>Created automatically.</b> These fields were derived from the prompt and are filled in from every call.</span></div>
+            <div id="anRows" style="display:flex;flex-direction:column;gap:10px"></div>
+            <div class="field" id="f-persona" style="border-top:1px solid var(--line);padding-top:16px"><div class="lab"><label for="i-persona">Analytics persona</label><span class="badge"></span></div>
+              <textarea class="ctl" id="i-persona" rows="3" placeholder="e.g., You are analyzing calls for a real estate lead qualification campaign..."></textarea></div>
+          </div>
+        </div>
+      </div>
+
+      <div class="fFoot"><span class="msg" id="footMsg"></span><div class="acts" id="footActs"></div></div>
+    </div>
+
+    <div id="pop"><div class="popCard" id="popCard"></div></div>
+   </section>
+
+   <div id="done">
+     <div class="ring"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
+     <h3>Voice assistant created</h3>
+     <p id="doneSub"></p>
+     <div class="chips" style="margin-top:10px"><button class="btn pri" id="doneClose">View on dashboard</button><button class="btn" id="againBtn">Create another</button></div>
+   </div>
+  </div>
+ </div>
+</div>
+
+<div id="demo">
+  <span>Demo</span>
+  <button id="dRestart">Restart</button>
+  <button id="dLive" class="on">Mode: live AI</button>
+  <button id="dVoice">Bot voice: browser</button>
+  <select id="dVoiceSel" aria-label="Browser voice"></select>
+  <em id="dAi">AI: checking…</em>
+  <button id="dAuto" class="on">Auto-answer: on</button>
+  <button id="dUser">Speak answers: off</button>
+</div>
+<div id="toast" role="status"></div>
+<input type="file" id="filePick" hidden multiple>
+
+<script>
+(function(){
+'use strict';
+var $=function(s){return document.querySelector(s);};
+var params=new URLSearchParams(location.search);
+
+/* ---------- sample content (edit here) ---------- */
+var PHONES=[['+1 (555) 349-2041','US inbound line',true],['+1 (555) 349-2087','US outbound line'],['+1 (800) 555-0142','Toll-free']];
+var VOICES={standard:[['Anisha (Female, Indian) · Recommended'],['Arjun (Male, Indian)'],['Maya (Female, US)']],premium:[['Aria (Female, expressive) · Recommended'],['Kiran (Male, warm)'],['Nova (Female, neutral)']]};
+var MODE_NOTE={standard:'Standard cascaded: Deepgram STT · AWS Bedrock Nova Pro · Falcon 2 TTS',premium:'Premium: speech-to-speech (Live API)'};
+var ANALYTICS=[['patient_name','String','Full name of the patient or caller'],['treatment_inquired','String','Treatment or visit reason the caller asked about'],['insurance_carrier','String','Dental insurance mentioned by the caller'],['appointment_date','Date','Date the caller wants to come in'],['appointment_booked','Boolean','Whether the call ended with a booked appointment'],['caller_sentiment','String','Positive, neutral or negative']];
+var PERSONA='You are analyzing calls for {company}, a dental clinic. Each call is a patient asking about treatments, insurance or appointments. Extract the fields above exactly as the caller said them.';
+var S={
+ intro:['Hi! Do you want to build this assistant manually, or should I build it for you?','Build it for me.'],
+ name:['Great, let us build it together. What should we call this assistant?','Call it Apex Dental Patient Advisor.','Apex Dental Patient Advisor'],
+ phone:['I found three numbers on your account. I suggest the US inbound line. Shall I use it?','Yes, use that one.'],
+ mode:['Standard or premium voice mode?','Standard.'],
+ voice:['For Standard, I recommend Anisha. Should I pick her?','Yes, Anisha is perfect.'],
+ source:['Last thing here. Do you have a system prompt to upload, or should I generate one with you?','Generate it with me.'],
+ company:['Let us write the system prompt. What is the company name?','Apex Dental Care.','Apex Dental Care'],
+ industry:['Which domain or industry is it in?','Healthcare. It is a dental clinic.','Healthcare & Clinics'],
+ agent:['What name should the agent use on calls?','Anisha.','Anisha'],
+ role:['And what is her role?','Patient coordinator and front desk specialist.','Patient Coordinator & Front-Desk Specialist'],
+ goal:['What is her goal on a call?','Greet callers warmly, answer questions about cleaning, whitening and emergency visits, check insurance, and book appointments.','Greet callers warmly, answer questions about cleaning, whitening and emergency dental appointments, check insurance compatibility, and book appointments.'],
+ language:['Which languages should she speak?','English, and Hindi if the caller prefers.','English and Hindi'],
+ tone:['What tone should she have?','Warm and welcoming.','Warm & Welcoming'],
+ docs:['Do you have any documents about your services or prices? You can drop them here.','Yes, I am adding our price list.','apex_services_price_list.pdf'],
+ guide:['Any guidelines or restrictions I should follow? This one is optional.','Never give medical advice, and transfer emergencies to a human.','Never give medical advice. Transfer emergencies to a human right away.'],
+ analyze:'Give me a moment to check what I have.',
+ missing:'Two details are missing. I have added them here.',
+ hours:['What are your working hours?','Monday to Friday eight to six, and Saturday nine to two.','Mon to Fri 8 am to 6 pm, Sat 9 am to 2 pm'],
+ handoff:['Where should I transfer a caller who needs a human?','To the front desk line.','Front desk line, +1 (555) 349-2000'],
+ askGen:['That is everything I need. Shall I generate the prompt?','Yes, go ahead.'],
+ upAsk:'Drop your system prompt file here, or click to choose it.',
+ upGot:['Got it. Shall I validate and test it?','Yes, please.'],
+ result:['Your prompt is ready. I also created six analytics fields and an analytics persona from it. Want to change anything?','Looks good. Save it.'],
+ manual:'You are in control. Press play any time and I will take over.',
+ saved:'Done. Your assistant is saved and ready for calls.'
+};
+var PIPE={
+ gen:[['Building system prompt',['Creating identity and mission…','Writing the call flow…','Adding guardrails and handoff…'],'Building your system prompt.'],
+      ['Validating system prompt',['Checking required sections…','Checking turn length and spoken numbers…'],'Now validating it.'],
+      ['Simulating the system prompt',['Running example conversations…'],'And running a few example calls.']],
+ upload:[['Reading system prompt',['Parsing the uploaded file…','Finding sections…'],'Reading your system prompt.'],
+      ['Validating system prompt',['Checking required sections…','Checking turn length and spoken numbers…'],'Now validating it.'],
+      ['Simulating the system prompt',['Running example conversations…'],'And running a few example calls.']]
+};
+var SIM=[['Caller','Hi, do you take Delta Dental?'],['Agent','Yes, we accept Delta Dental. Would you like to book a visit?'],['Caller','How much is a cleaning?'],['Agent','An exam and cleaning is ninety-five dollars. Shall I find you a time?'],['Caller','I have a bad toothache right now.'],['Agent','I am sorry to hear that. Let me connect you to our front desk straight away.']];
+
+/* ---------- state ---------- */
+var run=0, botOn=false, busy=false, stage='intro', sound=!params.has('mute'), autoAns=true, speakAns=false, live=!params.has('scripted'), gemVoice=params.has('geminivoice'), gemAudio=null, ttsCache={}, aiDown=false, aiDownAt=0;
+var DEF_EXTRA=[{id:'hours',label:'Working hours',question:'What are your working hours?',placeholder:'e.g. Mon to Fri, 9 am to 6 pm'},{id:'handoff',label:'Human handoff',question:'Where should I transfer a caller who needs a human?',placeholder:'Who should take over a call'}], EXTRA=[];
+var promptText='', mode='', asked={}, partial={}, docs=[], upFile='', analysed=false, source='';
+function Cancel(){} Cancel.prototype=Object.create(Error.prototype);
+var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
+function check(t){ if(t!==run) throw new Cancel(); }
+function need(t){ check(t); if(!botOn) throw new Cancel(); }
+async function wait(ms,t){ var e=0; while(e<ms){ await sleep(40); check(t); e+=40; } }
+function start(fn){ var t=++run; stopSpeech(); Promise.resolve().then(function(){return fn(t);}).catch(function(e){ if(!(e instanceof Cancel)) console.error(e); }).then(function(){ if(t===run){ setOrb('idle'); refresh(); } }); return t; }
+
+/* ---------- speech ---------- */
+var botVoice=null,userVoice=null,synth=window.speechSynthesis;
+function pickVoices(){ if(!synth) return; var all=synth.getVoices(); if(!all.length) return;
+  var en=all.filter(function(v){return /^en/i.test(v.lang);});
+  var indian=all.filter(function(v){return /en[-_]IN/i.test(v.lang)||/\b(India|Neerja|Veena|Tara|Aman|Heera|Aditi|Raveena|Kajal|Swara|Isha|Rishi|Ravi|Prabhat)\b/i.test(v.name)&&/^en/i.test(v.lang);});
+  var hindi=all.filter(function(v){return /hi[-_]IN/i.test(v.lang);});
+  function best(list){ var fem=/\b(Neerja|Veena|Tara|Heera|Aditi|Raveena|Kajal|Swara|Isha|Female)\b/i, nat=/Natural|Online|Google|Premium|Enhanced/i;
+    return list.slice().sort(function(x,y){ return (fem.test(y.name)*2+nat.test(y.name))-(fem.test(x.name)*2+nat.test(x.name)); })[0]||null; }
+  var saved=null; try{ saved=localStorage.getItem('va_voice'); }catch(e){}
+  /* default bot voice: Google Hindi in Chrome (reads English with an Indian accent); other browsers fall back to the best Indian voice */
+  var googleHindi=hindi.filter(function(v){ return /^Google/i.test(v.name); })[0];
+  botVoice=all.filter(function(v){ return v.name===saved; })[0]||googleHindi||best(indian)||best(hindi)||best(en)||all[0];
+  var sel=$('#dVoiceSel'); if(sel){ sel.innerHTML=''; (googleHindi?[googleHindi]:[]).concat(indian,hindi.filter(function(v){ return v!==googleHindi; }),en.filter(function(v){ return indian.indexOf(v)<0; })).forEach(function(v){ var o=document.createElement('option'); o.value=v.name; o.textContent=(indian.indexOf(v)>=0||hindi.indexOf(v)>=0?'🇮🇳 ':'')+v.name+' ('+v.lang+')'; sel.appendChild(o); }); sel.value=botVoice.name; }
+  userVoice=indian.filter(function(v){return v!==botVoice;})[0]||en.filter(function(v){return v!==botVoice;})[0]||botVoice; }
+if(synth){ pickVoices(); synth.onvoiceschanged=pickVoices; }
+function stopSpeech(){ try{ if(synth) synth.cancel(); }catch(e){} if(gemAudio){ try{ gemAudio.pause(); }catch(e){} gemAudio=null; } }
+function gemOff(){ if(gemVoice){ gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); toast('Gemini voice is unavailable. Using the browser voice.'); } }
+function gemSpeak(text,t){ return new Promise(function(res){ var done=false,a=null; function fin(v){ if(done) return; done=true; clearInterval(iv); res(v); }
+  var iv=setInterval(function(){ if(t!==run||!botOn){ if(a){ try{ a.pause(); }catch(e){} } fin(false); } },60);
+  var p=ttsCache[text]||(ttsCache[text]=agent({kind:'tts',text:text},null,13000));
+  p.then(function(j){ if(done) return; if(!j||!j.audio) throw new Error('no audio'); a=gemAudio=new Audio('data:'+(j.mime||'audio/wav')+';base64,'+j.audio); a.onended=function(){ fin(true); }; a.onerror=function(){ gemOff(); fin('fail'); }; return a.play(); })
+   .catch(function(){ delete ttsCache[text]; if(!done){ gemOff(); fin('fail'); } }); }); }
+function speak(text,t,asUser){ if(sound&&gemVoice&&!asUser) return gemSpeak(text,t).then(function(v){ return v==='fail'?speak(text,t,asUser):v; });
+ return new Promise(function(res){
+  var est=500+text.length*(asUser?58:62), done=false, to=null, started=false;
+  function fin(v){ if(done) return; done=true; clearInterval(iv); clearTimeout(to); clearTimeout(wd); res(v); }
+  var iv=setInterval(function(){ if(t!==run||!botOn){ stopSpeech(); fin(false); } },60), wd=null;
+  if(sound&&synth&&(!asUser||speakAns)){
+    try{ var u=new SpeechSynthesisUtterance(text); u.voice=asUser?userVoice:botVoice; u.lang=(u.voice&&u.voice.lang)||'en-IN'; u.rate=1.03; u.pitch=asUser?0.9:1.05;
+      u.onstart=function(){ started=true; }; u.onend=function(){ fin(true); }; u.onerror=function(){ if(!done&&!to) to=setTimeout(function(){fin(true);},est); };
+      synth.speak(u);
+      wd=setTimeout(function(){ if(!started&&!done){ stopSpeech(); to=setTimeout(function(){fin(true);},est); } },1500);
+      setTimeout(function(){ fin(true); },est*2.2+4000);
+    }catch(e){ to=setTimeout(function(){fin(true);},est); }
+  } else { to=setTimeout(function(){fin(true);},est); }
+});}
+async function say(text,t){ need(t); setQ(text); setYou(''); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
+async function narrate(text,t){ if(!botOn) return; try{ await say(text,t); }catch(e){ check(t); } setOrb('work'); }
+async function hear(text,t){ need(t); setOrb('listen'); refresh(); var sp=speakAns?speak(text,t,true):null; var el=$('#you'); el.classList.remove('ph');
+  for(var i=1;i<=text.length;i++){ el.textContent=text.slice(0,i); await sleep(24); need(t); }
+  if(sp){ await sp; need(t); } await wait(320,t); }
+
+/* ---------- small UI helpers ---------- */
+function setQ(s){ $('#q').textContent=s; }
+function setYou(s){ var el=$('#you'); if(s){ el.textContent=s; el.classList.remove('ph'); } else { el.textContent='Your answer shows up here as you speak.'; el.classList.add('ph'); } }
+var orbState='idle';
+function setOrb(s){ orbState=s; $('#stage').className='stage '+s; }
+function refresh(){ var p=$('#pill'),tx='Paused',c='';
+  if(busy){ tx='Processing'; c='live'; }
+  if(botOn){ if(orbState==='speak'){tx='Speaking';c='speak';} else if(orbState==='listen'){tx='Listening';c='live';} else if(busy){tx='Processing';c='live';} else if(orbState==='work'){tx='Thinking';c='live';} else {tx='Waiting for you';c='live';} }
+  else if(!busy){ tx=stage==='intro'?'Ready':'Paused'; }
+  p.className='pill '+c; $('#pillT').textContent=tx;
+  $('#playBtn').innerHTML=botOn?'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Pause':'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Play';
+  $('#playBtn').className='btn'+(botOn?'':' pri');
+  $('#sndBtn').innerHTML=sound?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9zM17 9a4 4 0 0 1 0 6"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9v6h4l5 4V5L8 9zM17 9l5 6M22 9l-5 6"/></svg>';
+}
+function mark(id,state,text){ var f=$('#f-'+id); if(!f) return; f.classList.remove('is-active','is-done'); if(state) f.classList.add('is-'+state); var b=f.querySelector('.badge'); if(b) b.textContent=text||''; if(state==='active') f.scrollIntoView({block:'center',behavior:'smooth'}); }
+function val(id){ var e=$('#i-'+id); return e?e.value.trim():''; }
+function has(id){ if(asked[id]) return true; if(id==='mode') return !!mode; if(id==='docs') return docs.length>0; return val(id)!==''; }
+async function typeText(id,text,t){ var e=$('#i-'+id); partial[id]=true; var step=text.length>80?3:1; for(var i=step;i<text.length+step;i+=step){ e.value=text.slice(0,i); if(e.tagName==='TEXTAREA') e.scrollTop=e.scrollHeight; await sleep(20); need(t); } e.value=text; partial[id]=false; }
+async function ask(id,line,setter,t){ if(has(id)) return; mark(id,'active','Asking');
+  try{ await say(line[0],t); mark(id,'active','Listening'); await hear(line[1],t); mark(id,'active','Writing'); await setter(t); asked[id]=true; mark(id,'done','AI filled'); await wait(380,t); }
+  catch(e){ if(partial[id]){ var el=$('#i-'+id); if(el) el.value=''; partial[id]=false; } if(!asked[id]) mark(id,null); throw e; } }
+async function press(el,t){ need(t); el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('pressing'); await wait(650,t); el.classList.remove('pressing'); }
+function fit(){ var s=Math.min(1,(innerWidth-32)/1200,(innerHeight-76)/800); $('#fit').style.transform='scale('+s+')'; }
+addEventListener('resize',fit); fit();
+
+/* ---------- build static bits ---------- */
+(function(){ var o=$('#orb'),h=''; for(var r=0;r<11;r++)for(var c=0;c<11;c++){ var d=Math.sqrt((r-5)*(r-5)+(c-5)*(c-5)); var s=d>5.4?0:Math.max(2,Math.round(20-3.4*d)); h+='<span><b style="width:'+s+'px;height:'+s+'px;animation-delay:'+(d*0.11).toFixed(2)+'s"></b></span>'; } o.innerHTML=h;
+  var ps=$('#i-phone'); PHONES.forEach(function(p){ var op=document.createElement('option'); op.value=p[0]; op.textContent=p[0]+' ('+p[1]+')'; ps.appendChild(op); });
+})();
+function showPhoneChips(){ var w=$('#phoneChips'); w.innerHTML=''; PHONES.forEach(function(p){ var b=document.createElement('button'); b.className='chip'; b.innerHTML='<span class="mono">'+p[0]+'</span><span>'+p[1]+'</span>'+(p[2]?'<span class="tag acc">Recommended</span>':''); b.onclick=function(){ $('#i-phone').value=p[0]; syncChips(); }; w.appendChild(b); }); $('#phoneSug').hidden=false; syncChips(); }
+function syncChips(){ var v=$('#i-phone').value; [].forEach.call($('#phoneChips').children,function(b,i){ b.classList.toggle('on',PHONES[i][0]===v); }); }
+$('#i-phone').onchange=syncChips;
+function setMode(m){ mode=m; $('#m-standard').classList.toggle('on',m==='standard'); $('#m-premium').classList.toggle('on',m==='premium'); $('#modeNote').textContent=m?MODE_NOTE[m]:'Pick a mode to see its voices.';
+  var s=$('#i-voice'); s.innerHTML='<option value="">'+(m?'Choose a voice':'Choose a mode first')+'</option>'; if(m) VOICES[m].forEach(function(v){ var o=document.createElement('option'); o.textContent=v[0]; s.appendChild(o); }); asked.voice=false; mark('voice',null); }
+$('#m-standard').onclick=function(){ setMode('standard'); }; $('#m-premium').onclick=function(){ setMode('premium'); };
+
+/* ---------- stages ---------- */
+function setStage(s){ stage=s; ['basics','upload','details','result'].forEach(function(k){ $('#st-'+k).hidden=(k!==s); });
+  var n=s==='basics'?1:(s==='result'?3:2); [1,2,3].forEach(function(i){ var tb=$('#tab'+i); tb.classList.toggle('on',i===n); tb.classList.toggle('done',i<n); });
+  var hasP=!!promptText; $('#tab2tag').textContent=hasP?'Attached':'Required'; $('#tab2tag').className='tag '+(hasP?'ok':'acc');
+  $('#introBtns').hidden=(s!=='intro'); $('#body').scrollTop=0; footer(); refresh(); }
+function footer(){ var m=$('#footMsg'),a=$('#footActs'); a.innerHTML=''; m.className='msg';
+  function add(label,cls,id,fn){ var b=document.createElement('button'); b.className='btn '+(cls||''); b.textContent=label; if(id) b.id=id; b.onclick=fn; a.appendChild(b); return b; }
+  if(stage==='basics'){ m.textContent='Choose how to add the system prompt to continue.'; add('Cancel','',null,closeAll); }
+  else if(stage==='details'){ m.textContent='Fill the details, then generate the prompt.'; add('Back','',null,function(){ go('basics'); }); }
+  else if(stage==='upload'){ m.textContent=upFile?'File attached.':'Attach a system prompt file to continue.'; if(upFile) m.className='msg ok'; add('Back','',null,function(){ go('basics'); }); var b=add('Validate and continue','pri','upGo',function(){ runFlow('upload'); }); b.disabled=!upFile; }
+  else if(stage==='result'){ if(promptText){ m.textContent='System prompt attached · '+$('#anRows').children.length+' analytics fields ready'; m.className='msg ok'; } else m.textContent='No prompt yet. Generate or upload one in step 2.'; add('Back','',null,function(){ go(source==='upload'?'upload':'details'); }); add('Save Voice Assistant','pri','saveBtn',save); }
+}
+function go(s){ run++; stopSpeech(); busy=false; closePop(); setStage(s); if(botOn) start(SCRIPT[s]); }
+function openForm(){ $('#card').classList.add('open'); }
+
+var SIMS={
+ intro:async function(t){ await wait(500,t); await say(S.intro[0],t); if(!autoAns) return; await wait(2400,t); await hear(S.intro[1],t); await press($('#introBot'),t); chooseBot(); },
+ basics:async function(t){ await wait(650,t);
+   await ask('name',S.name,function(t){ return typeText('name',S.name[2],t); },t);
+   if(!has('phone')){ showPhoneChips(); }
+   await ask('phone',S.phone,async function(t){ $('#i-phone').value=PHONES[0][0]; syncChips(); await wait(300,t); },t);
+   await ask('mode',S.mode,async function(t){ setMode('standard'); await wait(300,t); },t);
+   await ask('voice',S.voice,async function(t){ $('#i-voice').selectedIndex=1; await wait(300,t); },t);
+   $('#f-source').scrollIntoView({block:'center',behavior:'smooth'}); $('#srcGen').classList.add('cue'); $('#srcUp').classList.add('cue');
+   await say(S.source[0],t); if(!autoAns) return; await wait(2200,t); await hear(S.source[1],t); await press($('#srcGen'),t); pickSource('gen'); },
+ details:async function(t){ await wait(500,t);
+   if(analysed&&has('guide')){ await askGenerate(t); return; }
+   await ask('company',S.company,function(t){ return typeText('company',S.company[2],t); },t);
+   await ask('industry',S.industry,async function(t){ $('#i-industry').value=S.industry[2]; await wait(300,t); },t);
+   await ask('agent',S.agent,function(t){ return typeText('agent',S.agent[2],t); },t);
+   await ask('role',S.role,function(t){ return typeText('role',S.role[2],t); },t);
+   await ask('goal',S.goal,function(t){ return typeText('goal',S.goal[2],t); },t);
+   await ask('language',S.language,async function(t){ $('#i-language').value=S.language[2]; await wait(300,t); },t);
+   await ask('tone',S.tone,async function(t){ $('#i-tone').value=S.tone[2]; await wait(300,t); },t);
+   await ask('docs',S.docs,async function(t){ addFile('docFiles',S.docs[2]); docs.push(S.docs[2]); await wait(1300,t); },t);
+   await ask('guide',S.guide,function(t){ return typeText('guide',S.guide[2],t); },t);
+   await analyse(t); await askGenerate(t); },
+ upload:async function(t){ await wait(500,t);
+   if(!upFile){ mark('up','active','Waiting'); await say(S.upAsk,t); if(!autoAns) return; await wait(2400,t); attachPrompt('apex_dental_system_prompt.md'); await wait(1300,t); }
+   mark('up','done','Attached'); await say(S.upGot[0],t); $('#upGo').classList.add('cue'); if(!autoAns) return; await wait(1800,t); await hear(S.upGot[1],t); await press($('#upGo'),t); runFlow('upload'); },
+ result:async function(t){ if(!promptText) return; await wait(400,t); await say(S.result[0],t); $('#saveBtn').classList.add('cue'); if(!autoAns) return; await wait(2600,t); await hear(S.result[1],t); await press($('#saveBtn'),t); save(); }
+};
+/* ================= LIVE AI MODE ================= */
+function LiveFail(m){ this.message=m; } LiveFail.prototype=Object.create(Error.prototype);
+function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
+function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
+var toastT=null;
+function toast(m){ var e=$('#toast'); e.textContent=m; e.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(function(){ e.classList.remove('on'); },6000); }
+function setLive(v){ live=v; var b=$('#dLive'); b.textContent='Mode: '+(v?'live AI':'scripted'); b.classList.toggle('on',v); $('#dAuto').hidden=v; $('#dUser').hidden=v; }
+function aiStatus(ok,why){ var e=$('#dAi'); e.textContent=ok?'AI: live':'AI: offline'; e.className=ok?'ok':'bad'; e.title=why||''; }
+async function rawAgent(payload,ms){ var ctl=new AbortController(), to=setTimeout(function(){ ctl.abort(); },ms||22000), r, j;
+  try{ r=await fetch('/api/agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal}); j=await r.json(); }
+  catch(e){ throw new LiveFail('The AI service could not be reached'); } finally{ clearTimeout(to); }
+  if(!r.ok) throw new LiveFail((j&&j.error)||'The AI service returned an error');
+  return j; }
+async function agent(payload,t,ms){ var j;
+  if(aiDown&&Date.now()-aiDownAt>20000) aiDown=false; /* quota errors clear within a minute, so try Gemini again */
+  if(payload.kind==='turn'){
+    if(!aiDown){ try{ j=await rawAgent(payload,ms); aiStatus(true); }catch(e){ if(!(e instanceof LiveFail)) throw e; aiDown=true; aiDownAt=Date.now(); aiStatus(false,e.message); toast(e.message+'. I will keep going and write down exactly what you say.'); } }
+    if(!j) j=localTurn(payload); }
+  else { j=await rawAgent(payload,ms); if(payload.kind!=='tts'){ aiDown=false; aiStatus(true); } }
+  if(t!=null) check(t); return j; }
+/* offline note-taker: used only when Gemini cannot be reached. It never invents a value. */
+function qFor(f){ if(f.id==='voice'&&mode) return 'Which voice would you like? I recommend '+VOICES[mode][0][0].split(' (')[0]+'.'; if(S[f.id]&&S[f.id][0]) return S[f.id][0]; var x=EXTRA.filter(function(e){ return e.id===f.id; })[0]; if(x) return x.question; return 'What about the '+f.label.toLowerCase()+'?'+(f.options?' The options are '+f.options.join(', ')+'.':''); }
+function localTurn(p){ var u=String(p.user||''), fs=p.fields||[], out={updates:[],say:'',focus:'',action:'none',add_analytics:[]}, no=/\b(no|nope|skip|none|not now|nothing)\b/i.test(u), yes=!/\b(not|no|don't|dont)\b/i.test(u)&&/\b(yes|yeah|yep|ok|okay|sure|go ahead|please do|do it|fine)\b/i.test(u);
+  if(p.stage==='intro'){ if(/\b(manual|manually|myself|by myself|on my own|fill it in|fill this in|fill the form|type it|let me|i will do it|i'll do it|i will build|i'll build)\b/i.test(u)) out.action='build_manually'; else if(/\b(with (you|u)|together|for me|you can|(you|u) do it|you build|help me|go ahead|please do|do it|build|bill|create|make|auto|automatic|yes|yeah|yep|sure|okay|ok|bot|ai)\b/i.test(u)) out.action='build_with_ai'; else out.say='Would you like me to build it with you, or would you rather fill it in yourself?'; return out; }
+  if(p.stage==='result'){ if(/save|yes|done/i.test(u)) out.action='save'; else out.say='You can add fields with the Add Field button. Shall I save it?'; return out; }
+  if(p.stage==='upload'){ if(yes||/valid|test/i.test(u)) out.action='validate'; else out.say='Shall I validate and test it?'; return out; }
+  var empty=fs.filter(function(f){ return !f.value; }), cur=empty.filter(function(f){ return f.id===p.focus; })[0]||empty[0];
+  if(!cur){ if(p.stage==='basics'){ if(/upload/i.test(u)) out.action='upload_prompt'; else if(/generat|with me|with you|yes|\bai\b/i.test(u)) out.action='generate_with_ai'; else out.say=S.source[0]; }
+    else if(p.stage==='extra'){ if(yes||/generat/i.test(u)) out.action='generate_prompt'; else out.say=S.askGen[0]; }
+    else out.say='Let me check what I have.'; return out; }
+  var v='';
+  if(/\b(give me a (sec|second|minute|moment)|one (sec|second|moment|minute)|let me think|not sure|i don'?t know|no idea)\b/i.test(u)&&u.split(/\s+/).length<9||/^\W*(hmm+\W*)?(wait|hold on)\W*$/i.test(u)){ out.say='Sure, take your time. '+qFor(cur); out.focus=cur.id; return out; }
+  if(/\?\s*$/.test(u)||/^\s*(what|why|how|who|which|where|when|can you|could you|do you|does|is it|is that|what's|whats|sorry|pardon|repeat)\b/i.test(u)){ out.say='Sorry, I cannot answer questions right now because the AI is offline. '+qFor(cur); out.focus=cur.id; return out; }
+  if(cur.type==='file'){ if(/\[I uploaded/.test(u)) cur.value='done'; else if(no) v='skip'; else { out.say='Click the upload box to add a file, or say skip.'; out.focus=cur.id; return out; } }
+  else if(cur.options){ var words=u.toLowerCase().split(/[^a-z0-9]+/).filter(function(w){ return w.length>2&&!/^(the|and|use|one|that|line|voice|mode|please|yes)$/.test(w); });
+    var score=cur.options.map(function(o){ return words.filter(function(w){ return o.toLowerCase().indexOf(w)>=0; }).length; }), top=Math.max.apply(null,score.concat(0));
+    var hit=top?cur.options.filter(function(o,i){ return score[i]===top; }):[];
+    if(hit.length!==1&&/first/i.test(u)) hit=[cur.options[0]]; if(hit.length!==1&&/second/i.test(u)&&cur.options[1]) hit=[cur.options[1]]; if(hit.length!==1&&/third|last/i.test(u)) hit=[cur.options[cur.options.length-1]];
+    if(hit.length!==1&&yes) hit=[cur.options[0]];
+    if(hit.length!==1){ out.say='Please pick one: '+cur.options.join(', ')+'.'; out.focus=cur.id; return out; } v=hit[0]; }
+  else if(!cur.required&&no) v='skip';
+  else if(/^\W*(yes|yeah|yep|no|nope|ok|okay|sure|fine|go ahead|hmm+|um+|uh+|skip|none)\b[\w\s,]{0,12}\W*$/i.test(u)){ out.say=(no?'I need this one to build the prompt. ':'')+qFor(cur); out.focus=cur.id; return out; }
+  else { v=u.replace(/^(call it|name it|it is called|it is|it's|its|the name is|we are|this is|she is|he is|her role is|to)\s+/i,'').replace(/[.\s]+$/,''); v=v.charAt(0).toUpperCase()+v.slice(1); }
+  if(v){ out.updates.push({id:cur.id,value:v}); cur.value=v; }
+  var next=fs.filter(function(f){ return !f.value; })[0];
+  if(next){ out.say='Got it. '+qFor(next); out.focus=next.id; }
+  else out.say=p.stage==='basics'?S.source[0]:(p.stage==='extra'?S.askGen[0]:'Let me check what I have.');
+  return out; }
+/* microphone (browser speech recognition) with a typed fallback */
+var SR=window.SpeechRecognition||window.webkitSpeechRecognition, rec=null, micOk=!!SR, micOn=true, waitRes=null;
+function micNote(){ var on=micOk&&micOn&&!!waitRes; $('#micBtn').classList.toggle('on',on); $('#sayBox').placeholder=micOk?(micOn?'Listening… or type here':'Mic is off. Type your answer'):'Type your answer'; }
+function startRec(){ if(!micOk||!micOn||rec) { micNote(); return; }
+  try{ var r=new SR(); rec=r; r.lang='en-IN'; r.interimResults=true; r.continuous=true; r.maxAlternatives=1;
+    r.onresult=function(e){ var txt='',fin=false; for(var i=0;i<e.results.length;i++){ txt+=e.results[i][0].transcript; if(e.results[i].isFinal) fin=true; } if(txt) setYou(txt); if(fin&&waitRes) waitRes(txt); };
+    r.onerror=function(e){ if(e.error==='audio-capture'&&micStream){ releaseMic(); return; } if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){ micOk=false; micNote(); toast('Microphone is blocked. Type your answer instead.'); } };
+    r.onend=function(){ if(rec===r) rec=null; if(waitRes&&micOk&&micOn) setTimeout(function(){ if(waitRes&&!rec) startRec(); },300); };
+    r.start(); }catch(e){ rec=null; }
+  micNote(); }
+/* Ask for the microphone once, on the Create Assistant click, and keep it open while the builder is open.
+   Otherwise each speech recognition start can show the permission prompt again
+   (one-time "Allow this time" grants, Safari, http pages that are not localhost). */
+var micStream=null;
+function warmMic(){ if(!live||!micOk||!micOn||micStream||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return Promise.resolve();
+  return navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){ micStream=st; if(/Android/i.test(navigator.userAgent)) releaseMic(); /* Android cannot share the mic with speech recognition */ })
+    .catch(function(e){ if(e&&/NotAllowed|Security|NotFound/.test(e.name)){ micOk=false; micNote(); toast('Microphone is blocked. Type your answers, or allow the mic from the address bar and press Restart.'); } }); }
+function releaseMic(){ if(micStream){ micStream.getTracks().forEach(function(k){ k.stop(); }); micStream=null; } }
+function stopRec(){ if(rec){ var r=rec; rec=null; r.onend=null; r.onresult=null; try{ r.abort(); }catch(e){} } }
+function listen(t){ need(t); setOrb('listen'); refresh(); $('#talk').hidden=false; $('#sayBox').value='';
+  return new Promise(function(res,rej){ var done=false;
+    function fin(v,err){ if(done) return; done=true; clearInterval(iv); waitRes=null; stopRec(); $('#talk').hidden=true; micNote(); if(err) rej(err); else res(v); }
+    waitRes=function(text){ text=String(text||'').trim(); if(!text) return; setYou(text); fin(text); };
+    var iv=setInterval(function(){ if(t!==run||!botOn) fin(null,new Cancel()); },80);
+    setTimeout(function(){ if(!done) startRec(); },300); }); }
+function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&waitRes){ $('#sayBox').value=''; waitRes(v); } }
+$('#sendBtn').onclick=sendTyped; $('#sayBox').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); sendTyped(); } };
+$('#micBtn').onclick=function(){ if(!micOk){ toast('Speech recognition is not available in this browser. Type your answer.'); return; } micOn=!micOn; if(micOn){ if(waitRes) startRec(); } else stopRec(); micNote(); };
+
+/* what the agent sees */
+function optsOf(id){ return [].map.call($('#i-'+id).options,function(o){ return o.value?o.textContent:''; }).filter(Boolean); }
+function selText(id){ var e=$('#i-'+id); return e.value?e.options[e.selectedIndex].textContent:''; }
+function schema(){ var L=[]; function add(id,label,type,value,options,required){ var o={id:id,label:label,type:type,value:value||'',required:required!==false}; if(options) o.options=options; L.push(o); }
+  if(stage==='basics'){ add('name','Assistant name','text',val('name')); add('phone','Phone number','select',selText('phone'),optsOf('phone')); add('mode','Voice mode','select',cap(mode),['Standard','Premium']); add('voice','Voice','select',selText('voice'),mode?optsOf('voice'):['Choose the voice mode first']); }
+  else if(stage==='details'&&!analysed){ add('company','Company name','text',val('company')); add('industry','Domain or industry','select',selText('industry'),optsOf('industry')); add('agent','Agent name','text',val('agent')); add('role','Agent role','text',val('role')); add('goal','Agent goal','text',val('goal')); add('language','Language requirements','select',selText('language'),optsOf('language')); add('tone','Agent tone','select',selText('tone'),optsOf('tone'));
+    add('docs','Company documents (file upload)','file',docs.length?docs.join(', '):(asked.docs?'skip':''),null,false); add('guide','Guidelines or restrictions','text',val('guide')||(asked.guide?'skip':''),null,false); }
+  else if(stage==='details'){ EXTRA.forEach(function(x){ add(x.id,x.label,'text',val(x.id)); }); }
+  return L; }
+function allFields(){ var L=[]; function a(l,v){ L.push({label:l,value:v||''}); }
+  a('Assistant name',val('name')); a('Voice mode',mode); a('Voice',selText('voice').split(' (')[0]);
+  a('Company name',val('company')); a('Domain or industry',selText('industry')); a('Agent name',val('agent')); a('Agent role',val('role')); a('Agent goal',val('goal')); a('Language requirements',selText('language')); a('Agent tone',selText('tone')); a('Documents uploaded',docs.join(', ')); a('Guidelines or restrictions',val('guide'));
+  EXTRA.forEach(function(x){ a(x.label,val(x.id)); }); return L; }
+function matchOption(el,v){ var n=function(s){ return String(s).toLowerCase().replace(/[^a-z0-9+]+/g,' ').trim(); }, want=n(v), os=[].filter.call(el.options,function(o){ return o.value; });
+  return os.filter(function(o){ return n(o.textContent)===want; })[0]||os.filter(function(o){ var x=n(o.textContent); return x.indexOf(want)===0||want.indexOf(x)===0; })[0]||os.filter(function(o){ var x=n(o.textContent); return x.indexOf(want)>=0||want.indexOf(n(o.value))>=0; })[0]||null; }
+function detailsDone(){ return ['company','industry','agent','role','goal','language','tone'].every(function(k){ return val(k); })&&(docs.length>0||asked.docs)&&(val('guide')||asked.guide); }
+function extrasDone(){ return EXTRA.every(function(x){ return val(x.id); }); }
+function popOpen(){ return $('#pop').classList.contains('on'); }
+function cueSource(){ $('#f-source').scrollIntoView({block:'center',behavior:'smooth'}); $('#srcGen').classList.add('cue'); $('#srcUp').classList.add('cue'); }
+async function applyUpdates(us,t){ for(var k=0;k<us.length;k++){ var id=String(us[k].id||''), v=String(us[k].value||'').trim(); if(!v) continue;
+    var skip=/^(skip|skipped|none|no|n\/a)$/i.test(v);
+    if(id==='mode'){ var m=/prem/i.test(v)?'premium':(/stand/i.test(v)?'standard':''); if(!m||m===mode) continue; mark('mode','active','Writing'); setMode(m); asked.mode=true; await wait(300,t); mark('mode','done','AI filled'); continue; }
+    if(id==='docs'){ if(skip){ asked.docs=true; mark('docs','done','Skipped'); } continue; }
+    if(id==='guide'&&skip){ asked.guide=true; mark('guide','done','Skipped'); continue; }
+    var el=$('#i-'+id); if(!el||!$('#f-'+id)||!/^[a-z0-9_]+$/.test(id)) continue;
+    mark(id,'active','Writing');
+    try{ if(el.tagName==='SELECT'){ var o=matchOption(el,v); if(!o){ mark(id,null); continue; } el.value=o.value; if(id==='phone'){ showPhoneChips(); } await wait(300,t); }
+      else await typeText(id,v,t); }
+    catch(e){ if(partial[id]){ el.value=''; partial[id]=false; mark(id,null); } throw e; }
+    asked[id]=true; mark(id,'done','AI filled');
+    var xi=EXTRA.map(function(x){ return x.id; }).indexOf(id); if(xi>=0&&popOpen()){ var li=$('#anList').children[5+xi]; if(li) setRow(li,'ok','OK',''); }
+    await wait(250,t); } }
+
+/* analysis: the model decides what is missing and the inputs are created on the fly */
+function extraField(x){ var d=document.createElement('div'); d.className='field'; d.id='f-'+x.id; d.innerHTML='<div class="lab"><label><i>*</i></label><span class="badge"></span></div><input class="ctl">';
+  var l=d.querySelector('label'); l.htmlFor='i-'+x.id; l.insertBefore(document.createTextNode(x.label+' '),l.firstChild); var i=d.querySelector('input'); i.id='i-'+x.id; i.placeholder=x.placeholder||''; return d; }
+function finishAnalysis(){ var eg=$('#extraGrid'); EXTRA.forEach(function(x){ var f=$('#f-'+x.id); if(f) eg.appendChild(f); }); $('#extraBox').hidden=!EXTRA.length; closePop(); busy=false; }
+async function liveAnalyse(t){ check(t); busy=true; setOrb('work'); refresh();
+  var req=agent({kind:'analyze',fields:allFields()},null).catch(function(){ return null; });
+  var names=['Company profile','Agent identity and role','Goal, tone and language','Documents','Guidelines and restrictions'];
+  openPop('<div class="popHead"><span class="spin" id="anSpin"></span><div><h3 id="anTitle">Analyzing your answers</h3><p id="anSub">Checking that the prompt has everything it needs.</p></div></div><ul class="rows" id="anList">'+names.map(row).join('')+row('Looking for anything missing')+'</ul><div class="grid2" id="anFields" hidden></div><div class="popFoot" id="anFoot" hidden><button class="btn pri" id="anGo">Continue</button></div>');
+  await narrate(S.analyze,t);
+  var list=$('#anList'), lis=list.children;
+  for(var i=0;i<5;i++){ setRow(lis[i],'run','Checking'); await wait(480,t); setRow(lis[i],'ok','OK',i===3?(docs.length?docs.length+' file read':'None added (optional)'):(i===4?(val('guide')?'':'None added (optional)'):'')); }
+  setRow(lis[5],'run','Checking'); var out=await req; check(t);
+  var seen={}; EXTRA=out?(out.missing||[]).map(function(m){ return {id:'x_'+String(m.id||m.label||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,24),label:String(m.label||''),question:String(m.question||''),placeholder:String(m.placeholder||'')}; }).filter(function(x){ if(!x.label||!x.question||seen[x.id]) return false; seen[x.id]=1; return true; }).slice(0,2):DEF_EXTRA.slice();
+  list.removeChild(lis[5]);
+  if(!EXTRA.length){ $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(900,t); analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); return; }
+  var g=$('#anFields'); EXTRA.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'miss','Missing',''); g.appendChild(extraField(x)); });
+  $('#anTitle').textContent=EXTRA.length>1?'A couple of details are missing':'One detail is missing'; $('#anSub').textContent='I created '+(EXTRA.length>1?'these inputs':'this input')+' for you. Answer out loud or type.'; $('#anSpin').hidden=true; g.hidden=false; $('#anFoot').hidden=false;
+  $('#anGo').onclick=function(){ finishAnalysis(); if(botOn) start(SCRIPT.details); };
+  analysed=true; busy=false; setOrb('idle'); refresh(); }
+async function runAnalysis(t){ await liveAnalyse(t); if(EXTRA.length) return {line:(EXTRA.length>1?'A couple of details are missing. ':'One detail is missing. ')+EXTRA[0].question,f:EXTRA[0].id}; finishAnalysis(); return {line:S.askGen[0],f:null}; }
+
+async function doAction(a,t){
+  if(stage==='intro'){ if(a==='build_with_ai'){ await press($('#introBot'),t); chooseBot(); return true; } if(a==='build_manually'){ await press($('#introManual'),t); chooseManual(); return true; } return false; }
+  if(stage==='basics'&&(a==='upload_prompt'||a==='generate_with_ai')&&val('name')&&val('phone')&&mode&&val('voice')){ var b=$(a==='upload_prompt'?'#srcUp':'#srcGen'); await press(b,t); pickSource(a==='upload_prompt'?'upload':'gen'); return true; }
+  if(stage==='details'&&a==='generate_prompt'&&analysed&&!popOpen()){ await press($('#genBtn'),t); runFlow('gen'); return true; }
+  if(stage==='upload'&&a==='validate'&&upFile){ await press($('#upGo'),t); runFlow('upload'); return true; }
+  if(stage==='result'&&a==='save'){ await press($('#saveBtn'),t); save(); return true; }
+  return false; }
+async function converse(t,opener,focus){ var line=opener,f=focus;
+  for(;;){
+    if(f&&$('#f-'+f)) mark(f,'active','Asking');
+    await say(line,t);
+    if(f&&$('#f-'+f)) mark(f,'active','Listening');
+    var user=await listen(t);
+    setOrb('work'); refresh();
+    var r=await agent({kind:'turn',stage:stage==='details'&&analysed?'extra':stage,fields:schema(),last_bot:line,focus:f||'',user:user},t);
+    if(f&&$('#f-'+f)&&!$('#f-'+f).classList.contains('is-done')) mark(f,null);
+    await applyUpdates(r.updates||[],t);
+    if(stage==='result') (r.add_analytics||[]).forEach(function(a){ var ty=['String','Number','Boolean','Date'].filter(function(x){ return x.toLowerCase()===String(a.type).toLowerCase(); })[0]||'String'; addAn(a.name,ty,a.description).scrollIntoView({block:'center',behavior:'smooth'}); });
+    if(await doAction(r.action,t)) return;
+    if(stage==='details'){
+      if(!analysed&&detailsDone()){ var o=await runAnalysis(t); line=o.line; f=o.f; if(!f) $('#genBtn').classList.add('cue'); continue; }
+      if(analysed&&popOpen()&&extrasDone()){ await wait(600,t); finishAnalysis(); var g=$('#genBtn'); g.classList.add('cue'); g.scrollIntoView({block:'center',behavior:'smooth'}); line=S.askGen[0]; f=null; continue; } }
+    if(stage==='basics'){ if(r.focus==='phone') showPhoneChips(); if(val('name')&&val('phone')&&mode&&val('voice')) cueSource(); }
+    line=r.say||'Sorry, could you say that again?'; f=r.focus||null; } }
+function basicsOpener(){ if(!val('name')) return {line:S.name[0],f:'name'}; if(!val('phone')){ showPhoneChips(); return {line:S.phone[0],f:'phone'}; } if(!mode) return {line:S.mode[0],f:'mode'};
+  if(!val('voice')) return {line:'For '+cap(mode)+', I recommend '+VOICES[mode][0][0].split(' (')[0]+'. Should I pick that voice?',f:'voice'}; cueSource(); return {line:S.source[0],f:null}; }
+function detailsOpener(){ var order=['company','industry','agent','role','goal','language','tone'];
+  if(!analysed){ for(var i=0;i<order.length;i++) if(!val(order[i])) return {line:S[order[i]][0],f:order[i]}; if(!(docs.length||asked.docs)) return {line:S.docs[0],f:'docs'}; if(!(val('guide')||asked.guide)) return {line:S.guide[0],f:'guide'}; return null; }
+  var miss=EXTRA.filter(function(x){ return !val(x.id); })[0]; if(miss) return {line:miss.question,f:miss.id}; $('#genBtn').classList.add('cue'); return {line:S.askGen[0],f:null}; }
+var LIVE={
+ intro:async function(t){ await wait(500,t); await converse(t,S.intro[0],null); },
+ basics:async function(t){ await wait(650,t); var o=basicsOpener(); await converse(t,o.line,o.f); },
+ details:async function(t){ await wait(500,t); if(analysed&&!popOpen()&&EXTRA.some(function(x){ var f=$('#f-'+x.id); return f&&f.parentNode!==$('#extraGrid'); })) finishAnalysis();
+   var o=detailsOpener()||await runAnalysis(t); await converse(t,o.line,o.f); },
+ upload:async function(t){ await wait(500,t); if(!upFile){ mark('up','active','Waiting'); await say(S.upAsk,t); return; } mark('up','done','Attached'); $('#upGo').classList.add('cue'); await converse(t,S.upGot[0],null); },
+ result:async function(t){ if(!promptText) return; await wait(400,t); $('#saveBtn').classList.add('cue'); var n=$('#anRows').children.length; await converse(t,'Your prompt is ready. I also created '+n+' analytics fields and an analytics persona. Want to add anything, or shall I save it?',null); }
+};
+function liveWrap(k){ return async function(t){ try{ await LIVE[k](t); }catch(e){ if(!(e instanceof LiveFail)) throw e; if(t!==run) return; toast(e.message); $('#talk').hidden=true; setOrb('idle'); refresh(); } }; }
+var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return live?liveWrap(k):SIMS[k]; }}); });
+
+/* ---------- dashboard (saved in this browser) ---------- */
+var LS='voice_assistants_demo';
+function loadList(){ try{ return JSON.parse(localStorage.getItem(LS)||'[]')||[]; }catch(e){ return []; } }
+function renderDash(){ var list=loadList(), w=$('#dash'); w.innerHTML=''; $('#dashEmpty').hidden=list.length>0;
+  list.forEach(function(a){ var c=document.createElement('div'); c.className='tile';
+    c.innerHTML='<div class="rowBetween"><h4></h4><span class="tag ok">Active</span></div><div class="meta who"></div><div class="mono ph"></div><div class="meta vc"></div><details><summary>System prompt</summary><pre></pre></details><div class="rowBetween" style="margin-top:auto"><span class="meta dt"></span><button class="btn">Delete</button></div>';
+    c.querySelector('h4').textContent=a.name; c.querySelector('.who').textContent=[a.role,a.company].filter(Boolean).join(' · ')||'Voice assistant';
+    c.querySelector('.ph').textContent=a.phone||'No phone number'; c.querySelector('.vc').textContent=[a.voice,cap(a.mode||''),a.fields+' analytics fields'].filter(Boolean).join(' · ');
+    c.querySelector('pre').textContent=a.prompt||''; c.querySelector('.dt').textContent='Created '+new Date(a.created).toLocaleString();
+    c.querySelector('button').onclick=function(){ try{ localStorage.setItem(LS,JSON.stringify(loadList().filter(function(x){ return x.id!==a.id; }))); }catch(e){} renderDash(); };
+    w.appendChild(c); }); }
+
+async function askGenerate(t){ var g=$('#genBtn'); g.scrollIntoView({block:'center',behavior:'smooth'}); g.classList.add('cue'); await say(S.askGen[0],t); if(!autoAns) return; await wait(1800,t); await hear(S.askGen[1],t); await press(g,t); runFlow('gen'); }
+
+function chooseBot(){ botOn=true; openForm(); setStage('basics'); start(SCRIPT.basics); }
+function chooseManual(){ run++; stopSpeech(); botOn=false; openForm(); setStage('basics'); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
+function pickSource(k){ source=k; $('#srcGen').classList.remove('cue'); $('#srcUp').classList.remove('cue'); go(k==='gen'?'details':'upload'); }
+function tabGo(s){ if(stage==='intro') return; botOn=false; go(s); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
+$('#tab1').onclick=function(){ tabGo('basics'); }; $('#tab2').onclick=function(){ tabGo(source==='upload'?'upload':'details'); }; $('#tab3').onclick=function(){ tabGo('result'); };
+$('#introBot').onclick=chooseBot; $('#introManual').onclick=chooseManual;
+$('#srcGen').onclick=function(){ pickSource('gen'); }; $('#srcUp').onclick=function(){ pickSource('upload'); };
+
+/* ---------- files ---------- */
+function addFile(listId,name){ var w=$('#'+listId),d=document.createElement('div'); d.className='file'; d.innerHTML='<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="#5A5870" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg><span class="mono"></span><span class="pb"><i></i></span><span class="tag">Uploading</span>'; d.querySelector('.mono').textContent=name; w.appendChild(d);
+  setTimeout(function(){ d.querySelector('i').style.width='100%'; },60); setTimeout(function(){ var tg=d.querySelector('.tag'); tg.textContent='Uploaded'; tg.className='tag ok'; d.querySelector('.pb').remove(); },1100); }
+function attachPrompt(name){ upFile=name; $('#upFiles').innerHTML=''; addFile('upFiles',name); footer(); }
+var pickFor='';
+$('#docDrop').onclick=function(){ pickFor='doc'; $('#filePick').multiple=true; $('#filePick').click(); };
+$('#upDrop').onclick=function(){ pickFor='up'; $('#filePick').multiple=false; $('#filePick').click(); };
+$('#filePick').onchange=function(e){ var fs=[].slice.call(e.target.files); if(!fs.length) return;
+  if(pickFor==='doc'){ fs.forEach(function(f){ addFile('docFiles',f.name); docs.push(f.name); }); }
+  else { attachPrompt(fs[0].name); if(botOn) start(SCRIPT.upload); }
+  if(pickFor==='doc'&&waitRes) waitRes('[I uploaded the file '+fs.map(function(f){ return f.name; }).join(', ')+']');
+  e.target.value=''; };
+
+/* ---------- popups ---------- */
+function openPop(html){ $('#popCard').innerHTML=html; $('#pop').classList.add('on'); }
+function closePop(){ $('#pop').classList.remove('on'); }
+function row(title){ return '<li><span class="ic"></span><span class="t"><b>'+title+'</b><small></small></span><em>Waiting</em></li>'; }
+function setRow(li,cls,em,small){ li.className=cls; li.querySelector('em').textContent=em; if(small!=null) li.querySelector('small').textContent=small; }
+
+async function analyse(t){ check(t); EXTRA=DEF_EXTRA.slice(); busy=true; setOrb('work'); refresh();
+  var names=['Company profile','Agent identity and role','Goal, tone and language','Documents','Guidelines and restrictions','Working hours','Human handoff'];
+  openPop('<div class="popHead"><span class="spin" id="anSpin"></span><div><h3 id="anTitle">Analyzing your answers</h3><p id="anSub">Checking that the prompt has everything it needs.</p></div></div><ul class="rows" id="anList">'+names.map(row).join('')+'</ul><div class="grid2" id="anFields" hidden></div><div class="popFoot" id="anFoot" hidden><button class="btn pri" id="anGo">Continue</button></div>');
+  await narrate(S.analyze,t);
+  var lis=$('#anList').children, miss=[];
+  for(var i=0;i<lis.length;i++){ setRow(lis[i],'run','Checking'); await wait(520,t);
+    if(i===5&&!val('hours')){ setRow(lis[i],'miss','Missing','Callers will ask when you are open'); miss.push('hours'); }
+    else if(i===6&&!val('handoff')){ setRow(lis[i],'miss','Missing','Needed for emergencies and escalations'); miss.push('handoff'); }
+    else setRow(lis[i],'ok','OK',i===3?(docs.length?docs.length+' file read':'None added (optional)'):(i===4?(val('guide')?'':'None added (optional)'):'')); }
+  if(miss.length){
+    $('#anTitle').textContent='Two details are missing'; $('#anSub').textContent='I created these inputs for you. Answer out loud or type them in.'; $('#anSpin').hidden=true;
+    var g=$('#anFields'); g.hidden=false; if(!$('#f-hours')){ g.innerHTML='<div class="field" id="f-hours"><div class="lab"><label for="i-hours">Working hours <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-hours" placeholder="e.g. Mon to Fri, 9 am to 6 pm"></div><div class="field" id="f-handoff"><div class="lab"><label for="i-handoff">Human handoff <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-handoff" placeholder="Who should take over a call"></div>'; }
+    else { g.appendChild($('#f-hours')); g.appendChild($('#f-handoff')); }
+    $('#anFoot').hidden=false; var goP=new Promise(function(r){ $('#anGo').onclick=r; });
+    if(botOn){ try{ await say(S.missing,t);
+        await ask('hours',S.hours,function(t){ return typeText('hours',S.hours[2],t); },t); setRow(lis[5],'ok','OK','');
+        await ask('handoff',S.handoff,function(t){ return typeText('handoff',S.handoff[2],t); },t); setRow(lis[6],'ok','OK',''); await wait(600,t);
+      }catch(e){ check(t); await race(goP,t); } }
+    else { await race(goP,t); }
+    var eg=$('#extraGrid'); eg.appendChild($('#f-hours')); eg.appendChild($('#f-handoff')); $('#extraBox').hidden=false;
+  } else { $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(700,t); }
+  analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); await wait(350,t); }
+async function race(p,t){ var ok=false; p.then(function(){ ok=true; }); while(!ok){ await sleep(80); check(t); } }
+
+async function pipeline(kind,t){ check(t); busy=true; setOrb('work'); refresh(); var steps=PIPE[kind];
+  openPop('<div class="popHead"><span class="spin" id="plSpin"></span><div><h3 id="plTitle">'+(kind==='gen'?'Creating your system prompt':'Checking your system prompt')+'</h3><p id="plSub">Processing…</p></div></div><div class="bar"><i id="plBar"></i></div><ul class="rows" id="plList">'+steps.map(function(s){return row(s[0]);}).join('')+'</ul><div class="sim" id="plSim" hidden></div>');
+  var lis=$('#plList').children, bar=$('#plBar');
+  for(var i=0;i<steps.length;i++){ var st=steps[i]; setRow(lis[i],'run',i===0&&kind==='gen'?'Creating':'Processing',st[1][0]); $('#plSub').textContent=st[0]+'…';
+    var talk=narrate(st[2],t);
+    if(i===2){ var box=$('#plSim'); box.hidden=false; box.innerHTML=''; for(var k=0;k<SIM.length;k++){ var p=document.createElement('p'); p.innerHTML='<b>'+SIM[k][0]+':</b> '; p.appendChild(document.createTextNode(SIM[k][1])); box.appendChild(p); if(box.children.length>4) box.removeChild(box.firstChild); bar.style.width=(66+ (k+1)/SIM.length*30)+'%'; await wait(820,t); } }
+    else { for(var j=0;j<st[1].length;j++){ lis[i].querySelector('small').textContent=st[1][j]; bar.style.width=((i*33)+((j+1)/st[1].length)*30)+'%'; await wait(1250,t); } }
+    await talk; check(t);
+    setRow(lis[i],'ok','Done',i===0?(kind==='gen'?'Prompt drafted':'File parsed'):(i===1?'No issues found':'3 of 3 example calls passed')); }
+  bar.style.width='100%'; $('#plSpin').className='spin done'; $('#plTitle').textContent='Prompt ready'; $('#plSub').textContent='Built, validated and simulated.'; await wait(900,t);
+  closePop(); busy=false; }
+
+function runFlow(kind){ source=kind; $('#genBtn').classList.remove('cue');
+  if(kind==='gen'&&!analysed&&live&&botOn){ start(SCRIPT.details); return; }
+  start(async function(t){ if(kind==='gen'&&!analysed) await analyse(t); if(popOpen()) finishAnalysis();
+    var pr=(live&&kind==='gen')?agent({kind:'prompt',fields:allFields()},null,40000).catch(function(){ return null; }):null;
+    await pipeline(kind,t); var out=pr?await pr:null; check(t);
+    if(live&&kind==='gen'&&!out) toast('The AI prompt writer did not answer, so this prompt uses the built-in template.');
+    buildResult(kind,out); setStage('result'); await streamPrompt(t); setOrb('idle'); refresh(); if(botOn) await SCRIPT.result(t); }); }
+$('#genBtn').onclick=function(){ runFlow('gen'); };
+
+/* ---------- result ---------- */
+function buildResult(kind,out){ var c=val('company')||'[COMPANY NAME]', ag=val('agent')||'[AGENT NAME]', vn=($('#i-voice').value||'').split(' (')[0];
+  if(kind==='upload'){ promptText='# System Prompt (uploaded): '+(upFile||'system_prompt.md')+'\n\n[The contents of your uploaded system prompt appear here.]\n\nValidation: required sections found.\nSimulation: 3 of 3 example calls passed.'; }
+  else promptText='# System Prompt: '+c+' Voice Assistant\n## Voice mode: '+(mode==='premium'?'Premium (speech-to-speech)':'Standard (cascaded)')+(vn?' · Voice: '+vn:'')+'\n\n### 1. Identity and Core Mission\nYou are '+ag+', the '+(val('role')||'[ROLE]')+' for '+c+' ('+(val('industry')||'[INDUSTRY]')+').\nYour primary objective is to: '+(val('goal')||'[GOAL]')+'\nTone and demeanor: '+(val('tone')||'[TONE]')+'. Language: '+(val('language')||'[LANGUAGE]')+'.\nYou are speaking over a live telephone call.\n\n### 2. Call Flow\n1. Greet the caller and introduce yourself by name.\n2. Ask one short question to find out why they are calling.\n3. Answer only from the reference documents. Keep every turn to one or two sentences.\n4. Offer to book an appointment and repeat the details back to confirm.\n\n### 3. Business Facts\n'+(EXTRA.length?EXTRA.map(function(x){ return x.label+': '+(val(x.id)||'['+x.label.toUpperCase()+']'); }).join('\n'):'Working hours: [WORKING HOURS]')+'\nReference documents: '+(docs.length?docs.join(', '):'none uploaded')+'\n\n### 4. Guardrails\n'+(val('guide')||'No extra restrictions provided.')+'\nSay numbers and prices as words. Never invent prices, hours or policies.';
+  var an=ANALYTICS, persona=kind==='upload'?'':PERSONA.replace('{company}',c);
+  if(out&&out.prompt){ promptText=out.prompt; if(out.analytics&&out.analytics.length) an=out.analytics.map(function(a){ return [a.name,['String','Number','Boolean','Date'].filter(function(x){ return x.toLowerCase()===String(a.type).toLowerCase(); })[0]||'String',a.description]; }); if(out.persona) persona=out.persona; }
+  $('#resMode').textContent=kind==='upload'?'Uploaded':(mode==='premium'?'Premium':'Standard');
+  var w=promptText.split(/\s+/).filter(Boolean).length; $('#sWords').textContent=w; $('#sTok').textContent='~'+Math.round(w*1.35);
+  var rows=$('#anRows'); rows.innerHTML=''; an.forEach(function(a){ addAn(a[0],a[1],a[2]); });
+  $('#i-persona').value=persona; }
+function addAn(n,ty,d){ var r=document.createElement('div'); r.className='an'; r.innerHTML='<label>Field Name<input class="ctl nm" placeholder="e.g., interested_in_demo"></label><label>Description<input class="ctl" placeholder="What should be extracted?"></label><button aria-label="Remove field"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button><label class="ty">Type<select class="ctl"><option>String</option><option>Number</option><option>Boolean</option><option>Date</option></select></label>';
+  var c=r.querySelectorAll('.ctl'); c[0].value=n; c[1].value=d; c[2].value=ty; r.querySelector('button').onclick=function(){ r.remove(); cnt(); }; $('#anRows').appendChild(r); cnt(); return r; }
+function cnt(){ var n=$('#anRows').children.length; $('#anCount').textContent=n+' fields'; if(stage==='result'&&promptText) $('#footMsg').textContent='System prompt attached · '+n+' analytics fields ready'; }
+$('#anAdd').onclick=function(){ var r=addAn('','String',''); r.scrollIntoView({block:'center',behavior:'smooth'}); };
+async function streamPrompt(t){ var e=$('#prompt'); e.value=''; for(var i=0;i<promptText.length;i+=14){ e.value=promptText.slice(0,i); e.scrollTop=e.scrollHeight; await sleep(16); check(t); } e.value=promptText; e.scrollTop=0; }
+$('#editBtn').onclick=function(){ var e=$('#prompt'); var on=e.readOnly; e.readOnly=!on; e.classList.toggle('edit',on); this.textContent=on?'Done editing':'Edit prompt'; if(on) e.focus(); };
+$('#regenBtn').onclick=function(){ runFlow(source||'gen'); };
+$('#dlBtn').onclick=function(){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([$('#prompt').value],{type:'text/markdown'})); a.download='system_prompt.md'; a.click(); };
+function save(){ run++; stopSpeech();
+  var item={id:Date.now(),name:val('name')||'Untitled assistant',phone:val('phone'),mode:mode,voice:($('#i-voice').value||'').split(' (')[0],company:val('company'),role:val('role'),fields:$('#anRows').children.length,prompt:$('#prompt').value,created:new Date().toISOString()};
+  var list=loadList(); list.unshift(item); try{ localStorage.setItem(LS,JSON.stringify(list)); }catch(e){} renderDash();
+  $('#doneSub').textContent=(val('name')||'Your assistant')+(val('phone')?' · '+val('phone'):'')+' is ready for calls.'; $('#done').classList.add('on'); if(botOn) start(async function(t){ await say(S.saved,t); }); }
+
+/* ---------- controls ---------- */
+function clearStage(){ var ids=stage==='basics'?['name','phone','voice']:(stage==='details'?['company','industry','agent','role','goal','language','tone','guide','hours','handoff']:[]);
+  ids.forEach(function(id){ var e=$('#i-'+id); if(e) e.value=''; asked[id]=false; mark(id,null); });
+  if(stage==='basics'){ setMode(''); asked.mode=false; mark('mode',null); $('#phoneSug').hidden=true; }
+  if(stage==='details'){ docs=[]; asked.docs=false; mark('docs',null); $('#docFiles').innerHTML=''; analysed=false; $('#extraBox').hidden=true; $('#extraGrid').innerHTML=''; EXTRA=[]; }
+  if(stage==='upload'){ upFile=''; $('#upFiles').innerHTML=''; mark('up',null); footer(); } }
+$('#playBtn').onclick=function(){
+  if(botOn){ botOn=false; stopSpeech(); if(stage==='intro'){ run++; openForm(); setStage('basics'); setQ(S.manual); setYou(''); } if(!busy) setOrb('idle'); refresh(); return; }
+  botOn=true; refresh(); if(busy) return; if(stage==='intro'){ start(SCRIPT.intro); return; } start(SCRIPT[stage]); };
+$('#redoBtn').onclick=function(){ if(stage==='intro'){ botOn=true; start(SCRIPT.intro); return; } if(stage==='result'){ runFlow(source||'gen'); return; } closePop(); busy=false; clearStage(); botOn=true; setStage(stage); start(SCRIPT[stage]); };
+$('#sndBtn').onclick=function(){ sound=!sound; if(!sound) stopSpeech(); refresh(); };
+function resetAll(){ run++; stopSpeech(); botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
+  ['basics','details','upload'].forEach(function(s){ stage=s; clearStage(); }); asked={}; partial={}; source=''; promptText=''; $('#prompt').value=''; $('#anRows').innerHTML=''; $('#i-persona').value=''; cnt();
+  [].forEach.call(document.querySelectorAll('.cue'),function(b){ b.classList.remove('cue'); });
+  $('#card').classList.remove('open'); $('#talk').hidden=true; setStage('intro'); setQ(''); setYou(''); setOrb('idle'); }
+function closeAll(){ resetAll(); releaseMic(); $('#overlay').classList.remove('on'); }
+function openDemo(){ resetAll(); if(aiDown){ aiDown=false; pingAi(); } $('#overlay').classList.add('on'); botOn=true; refresh();
+  var t0=run, ask=setTimeout(function(){ if(run===t0) setQ('Please allow the microphone so I can hear you.'); },400);
+  warmMic().then(function(){ clearTimeout(ask); if(run===t0&&botOn) start(SCRIPT.intro); }); }
+$('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
+$('#dAuto').onclick=function(){ autoAns=!autoAns; this.textContent='Auto-answer: '+(autoAns?'on':'off'); this.classList.toggle('on',autoAns); };
+$('#dUser').onclick=function(){ speakAns=!speakAns; this.textContent='Speak answers: '+(speakAns?'on':'off'); this.classList.toggle('on',speakAns); };
+$('#dLive').onclick=function(){ setLive(!live); if(botOn&&!busy&&stage!=='intro') start(SCRIPT[stage]); else if(botOn&&stage==='intro') start(SCRIPT.intro); };
+function voiceOffQuiet(){ gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); }
+function pingAi(){ if(location.protocol==='file:'){ aiDown=true; voiceOffQuiet(); aiStatus(false,'Opened as a file: run node server.js and open http://localhost:3000');
+    /* Opened as a file: Chrome asks for the mic before every answer and Gemini is unreachable. Switch to the local server if it is running. */
+    fetch('http://localhost:3000/healthz',{mode:'no-cors'}).then(function(){ location.replace('http://localhost:3000/'+location.search); })
+      .catch(function(){ toast('Opened as a file, so the mic asks every time and Gemini is off. Run node server.js and open http://localhost:3000'); });
+    return; } rawAgent({kind:'ping'},15000).then(function(){ aiDown=false; aiStatus(true); }).catch(function(e){ aiDown=true; aiDownAt=Date.now(); voiceOffQuiet(); aiStatus(false,e.message); toast('Gemini is not connected: '+e.message); }); }
+$('#dVoiceSel').onchange=function(){ var n=this.value, v=(synth?synth.getVoices():[]).filter(function(x){ return x.name===n; })[0]; if(!v) return; botVoice=v; try{ localStorage.setItem('va_voice',n); }catch(e){}
+  gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); try{ synth.cancel(); var u=new SpeechSynthesisUtterance('Hello, I am your assistant builder.'); u.voice=v; u.lang=v.lang; synth.speak(u); }catch(e){} };
+$('#dVoice').onclick=function(){ gemVoice=!gemVoice; this.textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); this.classList.toggle('on',gemVoice); };
+setLive(live); $('#dVoice').textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); $('#dVoice').classList.toggle('on',gemVoice); pingAi(); pickVoices(); renderDash(); setStage('intro'); setOrb('idle');
+})();
+</script>
+</body>
+</html>

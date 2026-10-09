@@ -1,0 +1,12 @@
+{
+  "name": "voice-assistant-builder-demo",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Demo: an AI voice builder that talks with the user and fills the Create Voice Assistant form.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
