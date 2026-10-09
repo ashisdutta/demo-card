@@ -4,7 +4,7 @@
  * The Gemini key is read from the GEMINI_API_KEY environment variable and never sent to the browser.
  */
 
-const DEFAULT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.8-flash'];
+const DEFAULT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
 const ACTIONS = {
@@ -82,39 +82,62 @@ function parseJson(text) {
 // Errors worth retrying on the next model: unknown model, per-model quota (free tier is about 15 requests a minute), overload, timeout.
 const retryable = (e) => [404, 429, 500, 503, 504].includes(e.status) || /not found|not supported/i.test(e.message);
 
-async function callGemini(system, payload, maxTokens, temperature, ms) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) { const e = new Error('GEMINI_API_KEY is not set on the server'); e.status = 500; throw e; }
+// One request to one model. fast turns off "thinking" where the model allows it (gemini-3.5 models; 3.8 rejects it):
+// with thinking, gemini-3.5-flash spends about 300 tokens and a second or two on a simple form turn.
+async function callModel(model, system, payload, maxTokens, temperature, ms, fast, ctl) {
+  const timer = setTimeout(() => ctl.abort(), ms);
+  const gen = { responseMimeType: 'application/json', temperature: temperature, maxOutputTokens: maxTokens };
+  if (fast && /^gemini-3\.5/.test(model)) gen.thinkingConfig = { thinkingLevel: 'minimal' };
+  try {
+    const r = await fetch(ENDPOINT + encodeURIComponent(model) + ':generateContent', {
+      method: 'POST', signal: ctl.signal,
+      headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
+      body: JSON.stringify({
+        systemInstruction: { parts: [{ text: system }] },
+        contents: [{ role: 'user', parts: [{ text: JSON.stringify(payload) }] }],
+        generationConfig: gen
+      })
+    });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) {
+      const msg = (data && data.error && data.error.message) || ('Gemini returned ' + r.status);
+      throw Object.assign(new Error(msg.split('\n')[0]), { status: r.status });
+    }
+    const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
+    return parseJson(parts.map((p) => p.text || '').join(''));
+  } catch (e) {
+    throw e.name === 'AbortError' ? Object.assign(new Error('Gemini timed out'), { status: 504 }) : e;
+  } finally { clearTimeout(timer); }
+}
+
+// Tries the models in order. A model that fails moves on to the next one at once, and with opts.hedge a model that is
+// slow (Gemini load spikes can push one model to 10 s or more) gets the next model started in parallel after
+// opts.hedge ms. The first good answer wins and the others are cancelled.
+function callGemini(system, payload, maxTokens, temperature, ms, opts) {
+  opts = opts || {};
+  if (!process.env.GEMINI_API_KEY) return Promise.reject(Object.assign(new Error('GEMINI_API_KEY is not set on the server'), { status: 500 }));
   const models = [process.env.GEMINI_MODEL].concat(DEFAULT_MODELS).filter((m, i, a) => m && a.indexOf(m) === i);
-  let lastErr = null;
-  for (const model of models) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), ms || 10000);
-    try {
-      const r = await fetch(ENDPOINT + encodeURIComponent(model) + ':generateContent', {
-        method: 'POST', signal: ctl.signal,
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          systemInstruction: { parts: [{ text: system }] },
-          contents: [{ role: 'user', parts: [{ text: JSON.stringify(payload) }] }],
-          generationConfig: { responseMimeType: 'application/json', temperature: temperature, maxOutputTokens: maxTokens }
-        })
+  return new Promise((resolve, reject) => {
+    let next = 0, running = 0, done = false, lastErr = null, hedgeTimer = null;
+    const ctls = [];
+    const finish = (err, val) => {
+      if (done) return; done = true; clearTimeout(hedgeTimer); ctls.forEach((c) => c.abort());
+      if (err) { if (err.status !== 429) err.status = 502; reject(err); } else resolve(val);
+    };
+    const launch = () => {
+      if (done || next >= models.length) return;
+      const model = models[next++]; const ctl = new AbortController(); ctls.push(ctl); running++;
+      clearTimeout(hedgeTimer);
+      if (opts.hedge && next < models.length) hedgeTimer = setTimeout(launch, opts.hedge);
+      callModel(model, system, payload, maxTokens, temperature, ms || 10000, opts.fast, ctl).then((v) => finish(null, v), (e) => {
+        running--; if (done) return; lastErr = e;
+        if (!retryable(e)) return finish(e);
+        console.warn('[gemini] ' + model + ': ' + e.message.slice(0, 120) + ', trying the next model');
+        if (next < models.length) launch(); else if (!running) finish(lastErr || new Error('No Gemini model available'));
       });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) {
-        const msg = (data && data.error && data.error.message) || ('Gemini returned ' + r.status);
-        throw Object.assign(new Error(msg.split('\n')[0]), { status: r.status });
-      }
-      const parts = (((data.candidates || [])[0] || {}).content || {}).parts || [];
-      return parseJson(parts.map((p) => p.text || '').join(''));
-    } catch (e) {
-      lastErr = e.name === 'AbortError' ? Object.assign(new Error('Gemini timed out'), { status: 504 }) : e;
-      if (!retryable(lastErr)) { if (lastErr.status !== 429) lastErr.status = 502; throw lastErr; }
-      console.warn('[gemini] ' + model + ': ' + lastErr.message.slice(0, 120) + ', trying the next model');
-    } finally { clearTimeout(timer); }
-  }
-  if (lastErr && lastErr.status !== 429) lastErr.status = 502;
-  throw lastErr || new Error('No Gemini model available');
+    };
+    launch();
+  });
 }
 
 /* ---- optional Gemini text to speech (Interactions API). The browser falls back to its own voice if this fails. ---- */
@@ -213,7 +236,7 @@ async function handle(body) {
     const fields = cleanFields(b.fields);
     if (kind === 'ping') {
       if (process.env.MOCK_AGENT) return { status: 200, json: { ok: true, model: 'mock' } };
-      await callGemini('Reply with the JSON object {"ok":true} and nothing else.', { ping: 1 }, 256, 0);
+      await callGemini('Reply with the JSON object {"ok":true} and nothing else.', { ping: 1 }, 256, 0, 10000, { fast: true });
       return { status: 200, json: { ok: true } };
     }
     if (kind === 'tts') {
@@ -225,12 +248,12 @@ async function handle(body) {
     if (process.env.MOCK_AGENT) return { status: 200, json: mock(kind, Object.assign({}, b, { fields: fields })) };
 
     if (kind === 'analyze') {
-      const r = await callGemini(ANALYZE_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })) }, 1024, 0.3);
+      const r = await callGemini(ANALYZE_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })) }, 1024, 0.3, 10000, { fast: true, hedge: 4000 });
       const missing = arr(r.missing).slice(0, 2).map((m) => ({ id: clip(m.id, 30), label: clip(m.label, 40), question: clip(m.question, 160), placeholder: clip(m.placeholder, 80) })).filter((m) => m.label && m.question);
       return { status: 200, json: { missing: missing } };
     }
     if (kind === 'prompt') {
-      const r = await callGemini(PROMPT_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })) }, 4096, 0.5, 18000);
+      const r = await callGemini(PROMPT_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })) }, 4096, 0.5, 18000, { hedge: 12000 });
       return { status: 200, json: {
         prompt: clip(r.prompt, 8000),
         analytics: arr(r.analytics).slice(0, 8).map((a) => ({ name: clip(a.name, 40), description: clip(a.description, 160), type: clip(a.type, 10) })),
@@ -242,7 +265,7 @@ async function handle(body) {
     const r = await callGemini(TURN_SYSTEM, {
       stage: stage, stage_hint: STAGE_HINT[stage], allowed_actions: allowed.concat('none'),
       fields: fields, last_bot: clip(b.last_bot, 500), asking: clip(b.focus, 40), user: clip(b.user, 800)
-    }, 2048, 0.3);
+    }, 2048, 0.3, 9000, { fast: true, hedge: 2500 });
     // Backstop for the prompt rules: only known fields, and never "skip" on a required field.
     const byId = {}; fields.forEach((f) => { byId[f.id] = f; });
     const updates = arr(r.updates).slice(0, 12).map((u) => ({ id: clip(u && u.id, 40), value: clip(u && u.value, 1500).trim() }))
