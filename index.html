@@ -206,6 +206,27 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 .tile .meta{font-size:13px;color:var(--muted)} .tile .mono{font-family:var(--mono);font-size:13px}
 .tile summary{font-size:13px;font-weight:500;cursor:pointer;color:var(--accd);min-height:28px}
 .tile pre{white-space:pre-wrap;max-height:220px;overflow:auto;font-family:var(--mono);font-size:12px;line-height:18px;background:var(--soft);padding:10px;border-radius:10px;margin:8px 0 0}
+.tile{position:relative;gap:14px}
+.tHead{display:flex;align-items:flex-start;gap:14px}
+.tIcon{width:52px;height:52px;border-radius:12px;background:var(--tint);color:var(--acc);display:grid;place-items:center;flex:none}
+.tHead .tt{flex:1;min-width:0;display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.tHead h4{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.pillOk{font-size:12px;font-weight:600;color:#fff;background:#4CB867;border-radius:999px;padding:3px 10px}
+.kebab{width:36px;height:36px;border:0;background:transparent;border-radius:8px;display:grid;place-items:center;color:var(--ink);flex:none}
+.kebab:hover{background:var(--soft)}
+.menu{position:absolute;top:58px;right:14px;background:#fff;border:1px solid var(--line);border-radius:10px;box-shadow:0 10px 30px rgba(22,21,29,.12);padding:6px;z-index:5;min-width:150px}
+.menu button{display:block;width:100%;text-align:left;border:0;background:transparent;padding:9px 12px;border-radius:7px;font-size:14px;color:var(--ink)}
+.menu button:hover{background:var(--soft)} .menu button.del{color:#C8352E}
+.tDesc{font-size:14px;line-height:21px;color:var(--muted);display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden;min-height:42px}
+.tRow{display:flex;align-items:center;gap:10px;font-size:14px;color:var(--ink)} .tRow svg{flex:none;color:var(--muted)}
+.tRow.kb{color:var(--acc)} .tRow.kb svg{color:var(--acc)}
+.tCall{display:flex;gap:10px} .tCall input{flex:1;min-width:0;height:44px}
+.tCall .btn{display:inline-flex;align-items:center;gap:8px;white-space:nowrap}
+.tCall .btn.calling{border-color:#4CB867;color:#2E8A47}
+.tile .btn.cfg{width:100%;justify-content:center}
+#demoTog{position:fixed;right:16px;bottom:16px;width:40px;height:40px;border-radius:12px;border:0;background:rgba(22,21,29,.86);color:#fff;display:grid;place-items:center;z-index:21;opacity:.55}
+#demoTog:hover,#demoTog.on{opacity:1}
+#demo.hide{display:none}
 .tile .btn{height:44px}
 /* demo bar */
 #demo{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:6px;align-items:center;padding:6px;border-radius:14px;background:rgba(22,21,29,.86);color:#fff;font-size:12px;z-index:20}
@@ -406,7 +427,8 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
  </div>
 </div>
 
-<div id="demo">
+<button id="demoTog" aria-label="Show demo controls" title="Demo controls"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/></svg></button>
+<div id="demo" class="hide">
   <span>Demo</span>
   <button id="dRestart">Restart</button>
   <button id="dLive" class="on">Mode: live AI</button>
@@ -515,7 +537,7 @@ function speak(text,t,asUser){ if(sound&&gemVoice&&!asUser) return gemSpeak(text
     }catch(e){ to=setTimeout(function(){fin(true);},est); }
   } else { to=setTimeout(function(){fin(true);},est); }
 });}
-async function say(text,t){ need(t); setQ(text); setYou(''); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
+async function say(text,t){ need(t); if(GL.on){ if(!glQuiet()) glApp('Say: '+text); return; } setQ(text); setYou(''); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
 async function narrate(text,t){ if(!botOn) return; try{ await say(text,t); }catch(e){ check(t); } setOrb('work'); }
 async function hear(text,t){ need(t); setOrb('listen'); refresh(); var sp=speakAns?speak(text,t,true):null; var el=$('#you'); el.classList.remove('ph');
   for(var i=1;i<=text.length;i++){ el.textContent=text.slice(0,i); await sleep(24); need(t); }
@@ -605,8 +627,8 @@ function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&a
 function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
 var toastT=null;
 function toast(m){ var e=$('#toast'); e.textContent=m; e.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(function(){ e.classList.remove('on'); },6000); }
-function setLive(v){ live=v; var b=$('#dLive'); b.textContent='Mode: '+(v?'live AI':'scripted'); b.classList.toggle('on',v); $('#dAuto').hidden=v; $('#dUser').hidden=v; }
-function aiStatus(ok,why){ var e=$('#dAi'); e.textContent=ok?'AI: live':'AI: offline'; e.className=ok?'ok':'bad'; e.title=why||''; }
+function setLive(v){ live=v; if(!v) glClose(); var b=$('#dLive'); b.textContent='Mode: '+(v?'live AI':'scripted'); b.classList.toggle('on',v); $('#dAuto').hidden=v; $('#dUser').hidden=v; }
+function aiStatus(ok,why){ var e=$('#dAi'); if(ok&&GL.on){ aiLiveLabel(); return; } e.textContent=ok?'AI: live':'AI: offline'; e.className=ok?'ok':'bad'; e.title=why||''; }
 async function rawAgent(payload,ms){ var ctl=new AbortController(), to=setTimeout(function(){ ctl.abort(); },ms||22000), r, j;
   try{ r=await fetch('/api/agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal}); j=await r.json(); }
   catch(e){ throw new LiveFail('The AI service could not be reached'); } finally{ clearTimeout(to); }
@@ -672,7 +694,7 @@ function listen(t){ need(t); setOrb('listen'); refresh(); $('#talk').hidden=fals
     waitRes=function(text){ text=String(text||'').trim(); if(!text) return; setYou(text); fin(text); };
     var iv=setInterval(function(){ if(t!==run||!botOn) fin(null,new Cancel()); },80);
     setTimeout(function(){ if(!done) startRec(); },300); }); }
-function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&waitRes){ $('#sayBox').value=''; waitRes(v); } }
+function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&GL.on){ $('#sayBox').value=''; GL.heard=true; GL.newYou=false; GL.you=v; setYou(v); glSend({realtimeInput:{text:v}}); return; } if(v&&waitRes){ $('#sayBox').value=''; waitRes(v); } }
 $('#sendBtn').onclick=sendTyped; $('#sayBox').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); sendTyped(); } };
 $('#micBtn').onclick=function(){ if(!micOk){ toast('Speech recognition is not available in this browser. Type your answer.'); return; } micOn=!micOn; if(micOn){ if(waitRes) startRec(); } else stopRec(); micNote(); };
 
@@ -768,19 +790,172 @@ var LIVE={
  result:async function(t){ if(!promptText) return; await wait(400,t); $('#saveBtn').classList.add('cue'); var n=$('#anRows').children.length; await converse(t,'Your prompt is ready. I also created '+n+' analytics fields and an analytics persona. Want to add anything, or shall I save it?',null); }
 };
 function liveWrap(k){ return async function(t){ try{ await LIVE[k](t); }catch(e){ if(!(e instanceof LiveFail)) throw e; if(t!==run) return; toast(e.message); $('#talk').hidden=true; setOrb('idle'); refresh(); } }; }
-var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return live?liveWrap(k):SIMS[k]; }}); });
+var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return live?(GL.on?glStage(k):liveWrap(k)):SIMS[k]; }}); });
+/* ================= GEMINI LIVE: one WebSocket for the whole build =================
+   Opened when Create Assistant is clicked, closed once the assistant is saved (or the builder is closed).
+   Gemini hears the mic and speaks itself; it changes the form only through tool calls, checked here.
+   The mic is not sent while the bot's audio plays, so it never hears itself.
+   If Live cannot connect or drops, the turn-based mode above takes over. */
+var GL={ws:null,on:false,inCtx:null,outCtx:null,node:null,src:null,until:0,srcs:[],heard:false,said:'',you:'',newBot:true,newYou:true,quiet:false,quietT:null,closeAfter:false};
+var PCM16K="class P extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.p=0;this.s=0;this.n=0;this.b=[];}process(i){var c=i[0]&&i[0][0];if(c){for(var k=0;k<c.length;k++){this.s+=c[k];this.n++;this.p+=1;if(this.p>=this.r){this.p-=this.r;this.b.push(this.s/this.n);this.s=0;this.n=0;}}if(this.b.length>=1600){this.port.postMessage(new Float32Array(this.b));this.b=[];}}return true;}}registerProcessor('pcm16k',P);";
+function glSpeaking(){ return !!GL.outCtx&&GL.outCtx.currentTime<GL.until+0.3; }
+function glSend(o){ if(GL.ws&&GL.ws.readyState===1) GL.ws.send(JSON.stringify(o)); }
+function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); }
+/* the next line the app would speak is already in a tool result, so skip it once */
+function glHush(){ GL.quiet=true; clearTimeout(GL.quietT); GL.quietT=setTimeout(function(){ GL.quiet=false; },4000); }
+function glQuiet(){ if(!GL.quiet) return false; GL.quiet=false; clearTimeout(GL.quietT); return true; }
+/* audio contexts are created inside the Create Assistant click, so the browser lets them play */
+function glPrime(){ try{ if(!GL.outCtx) GL.outCtx=new AudioContext({sampleRate:24000}); if(!GL.inCtx) GL.inCtx=new AudioContext(); GL.outCtx.resume(); GL.inCtx.resume(); }catch(e){} }
+function glConnect(){ return rawAgent({kind:'live'},15000).then(function(j){ return new Promise(function(res,rej){ var ok=false, ws=new WebSocket(j.url+'?access_token='+encodeURIComponent(j.token)); GL.ws=ws;
+    var to=setTimeout(function(){ if(!ok){ try{ ws.close(); }catch(e){} rej(new LiveFail('Gemini Live did not answer')); } },10000);
+    ws.onopen=function(){ ws.send(JSON.stringify({setup:{model:'models/'+j.model}})); };
+    ws.onmessage=function(ev){ (typeof ev.data==='string'?Promise.resolve(ev.data):ev.data.text()).then(function(raw){ var m; try{ m=JSON.parse(raw); }catch(e){ return; }
+      if(m.setupComplete&&!ok){ ok=true; clearTimeout(to); GL.on=true; glMicStart(); res(); return; } glMsg(m); }); };
+    ws.onclose=function(e){ clearTimeout(to); var was=GL.on; glStop(); if(!ok) rej(new LiveFail('Gemini Live closed'+(e.reason?': '+e.reason:''))); else if(was) glDropped(); };
+  }); }); }
+function glMicStart(){ if(!micStream||!GL.inCtx||GL.node) return; var ctx=GL.inCtx, url=URL.createObjectURL(new Blob([PCM16K],{type:'text/javascript'}));
+  ctx.audioWorklet.addModule(url).then(function(){ if(!GL.on||!micStream) return; var src=ctx.createMediaStreamSource(micStream), node=new AudioWorkletNode(ctx,'pcm16k'), mute=ctx.createGain(); mute.gain.value=0;
+    node.port.onmessage=function(e){ glMic(e.data); }; src.connect(node); node.connect(mute); mute.connect(ctx.destination); GL.src=src; GL.node=node; })
+   .catch(function(){ toast('Could not stream the microphone. Type your answers.'); }); }
+function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk||glSpeaking()) return;
+  var b=new Int16Array(f.length); for(var i=0;i<f.length;i++){ var v=Math.max(-1,Math.min(1,f[i])); b[i]=v<0?v*32768:v*32767; }
+  var u=new Uint8Array(b.buffer), s=''; for(var k=0;k<u.length;k+=4096) s+=String.fromCharCode.apply(null,u.subarray(k,k+4096));
+  glSend({realtimeInput:{audio:{data:btoa(s),mimeType:'audio/pcm;rate=16000'}}}); }
+function glPlay(b64){ var ctx=GL.outCtx; if(!ctx||!sound) return; var bin=atob(b64), n=bin.length>>1, f=new Float32Array(n);
+  for(var i=0;i<n;i++){ var v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8); if(v>=32768) v-=65536; f[i]=v/32768; }
+  var buf=ctx.createBuffer(1,n,24000); buf.copyToChannel(f,0); var s=ctx.createBufferSource(); s.buffer=buf; s.connect(ctx.destination);
+  var at=Math.max(ctx.currentTime+0.04,GL.until); s.start(at); GL.until=at+buf.duration; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
+function glHushAudio(){ GL.srcs.forEach(function(s){ try{ s.stop(); }catch(e){} }); GL.srcs=[]; GL.until=0; }
+function glMsg(m){ var sc=m.serverContent;
+  if(m.toolCall){ var heard=GL.heard; glTools(m.toolCall.functionCalls||[],heard); }
+  if(!sc) return;
+  ((sc.modelTurn&&sc.modelTurn.parts)||[]).forEach(function(p){ if(p.inlineData&&p.inlineData.data) glPlay(p.inlineData.data); });
+  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
+  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.said=''; GL.newBot=false; GL.newYou=true; GL.heard=false; } GL.said+=sc.outputTranscription.text; setQ(GL.said.trim()); }
+  if(sc.interrupted) glHushAudio();
+  if(sc.turnComplete){ GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); } }
+function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
+/* orb, talk box and pill follow the live audio */
+setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&!glSpeaking()); },100);
+
+/* tools */
+async function glTools(calls,heard){ var out=[];
+  for(var i=0;i<calls.length;i++){ var c=calls[i], r; try{ r=await glTool(c.name,c.args||{},heard); }catch(e){ r={ok:false,error:e instanceof Cancel?'The form changed or was paused. Wait for the next [App] message.':String(e&&e.message||e)}; }
+    out.push({id:c.id,name:c.name,response:r}); }
+  glSend({toolResponse:{functionResponses:out}}); }
+function glForm(){ return schema().map(function(f){ var o={id:f.id,label:f.label,value:f.value||'(empty)',required:f.required}; if(f.options) o.options=f.options; return o; }); }
+async function glTool(name,a,heard){ var t=run;
+  if(name==='update_form'){
+    if(!heard) return {ok:false,error:'The person has not answered yet. Ask your question and wait for their answer.'};
+    var by={}, good=[], bad=[]; schema().forEach(function(f){ by[f.id]=f; });
+    (a.updates||[]).forEach(function(u){ var id=String(u&&u.id||''), v=String(u&&u.value||'').trim(), f=by[id];
+      if(!f||!v||(f.required&&/^(skip|skipped|none|n\/a|no)$/i.test(v))) bad.push(id||'(no id)'); else good.push({id:id,value:v}); });
+    if(!good.length) return {ok:false,rejected:bad,error:'Nothing was written. Use field ids from this form and only values the person said.',form:glForm()};
+    setOrb('work'); refresh(); await applyUpdates(good,t);
+    return {ok:true,rejected:bad,form:glForm(),next:glNext()}; }
+  if(name==='press_button'){ var b=String(a.button||''), say=glSayAfter(b);
+    if(say) glHush(); var done=await doAction(b,t);
+    if(!done){ GL.quiet=false; return {ok:false,error:'That button is not available right now.',form:glForm(),next:glNext()}; }
+    var o=stage==='basics'?basicsOpener():(stage==='details'?detailsOpener():null); if(o&&o.f) mark(o.f,'active','Asking');
+    return say?{ok:true,next:'Say: '+say}:{ok:true,next:'Say that the form is theirs now, in a few words.'}; }
+  if(name==='add_analytics_field'){ if(stage!=='result') return {ok:false,error:'Analytics fields can be added only at the end.'};
+    var ty=['String','Number','Boolean','Date'].filter(function(x){ return x.toLowerCase()===String(a.type).toLowerCase(); })[0]||'String';
+    addAn(String(a.name||'field'),ty,String(a.description||'')).scrollIntoView({block:'center',behavior:'smooth'}); return {ok:true,count:$('#anRows').children.length}; }
+  return {ok:false,error:'Unknown tool'}; }
+/* the line the app says right after a button, so the bot can say it in the same breath */
+function glSayAfter(b){
+  if(b==='build_with_ai'&&stage==='intro') return val('name')?basicsOpener().line:S.name[0];
+  if(b==='generate_with_ai'&&stage==='basics') return S.company[0];
+  if(b==='upload_prompt'&&stage==='basics') return S.upAsk;
+  if(b==='generate_prompt'&&stage==='details') return PIPE.gen[0][2];
+  if(b==='validate'&&stage==='upload') return PIPE.upload[0][2];
+  if(b==='save'&&stage==='result') return S.saved;
+  return ''; }
+/* what the bot should ask next, after a field is written */
+function glNext(){ var e=schema().filter(function(f){ return !f.value; })[0];
+  function ask(f){ mark(f.id,'active','Asking'); if(f.id==='phone') showPhoneChips(); return 'Next empty field: '+f.id+'. Say: '+qFor(f)+(f.options&&f.id!=='voice'?' (Options: '+f.options.join(' | ')+')':''); }
+  if(stage==='basics'){ if(e) return ask(e); cueSource(); return 'All basic fields are filled. Say: '+S.source[0]+' Then press upload_prompt or generate_with_ai, as they choose.'; }
+  if(stage==='details'&&!analysed){ if(!e){ setTimeout(glAnalyse,60); return 'All details are filled. Say only: '+S.analyze+' Then wait for the next [App] message.'; }
+    if(e.id==='docs'){ mark('docs','active','Asking'); return 'Next field: docs, a file upload only the person can do. Say: '+S.docs[0]+' If they say no, call update_form with docs = skip.'; }
+    if(e.id==='guide'){ mark('guide','active','Asking'); return 'Next field: guide, optional. Say: '+S.guide[0]+' If they have none, call update_form with guide = skip.'; }
+    return ask(e); }
+  if(stage==='details'){ if(e) return ask(e); if(popOpen()) finishAnalysis(); var g=$('#genBtn'); g.classList.add('cue'); g.scrollIntoView({block:'center',behavior:'smooth'}); return 'All missing details are filled. Say: '+S.askGen[0]+' If they agree, press generate_prompt.'; }
+  return ''; }
+async function glAnalyse(){ var t=run; try{ glHush(); await liveAnalyse(t); check(t);
+    if(EXTRA.length){ var x=EXTRA[0]; mark(x.id,'active','Asking'); glApp('The check found missing details and created these fields on screen: '+EXTRA.map(function(e){ return e.id+' ('+e.label+')'; }).join(', ')+'. Say: '+(EXTRA.length>1?'A couple of details are missing. ':'One detail is missing. ')+x.question); }
+    else { finishAnalysis(); $('#genBtn').classList.add('cue'); glApp('Nothing is missing. Say: '+S.askGen[0]+' If they agree, press generate_prompt.'); } }
+  catch(e){ if(!(e instanceof Cancel)) console.error(e); } }
+/* a stage opened by the person (or after processing): tell the bot what is on screen */
+function glStage(k){ return async function(t){ await wait(k==='intro'?300:500,t); if(glQuiet()) return; var o=null, note='';
+  if(k==='intro'){ o={line:S.intro[0]}; note='The builder just opened. Greet the person briefly.'; }
+  else if(k==='basics'){ o=basicsOpener(); note='Step 1, Basics, is on screen. Field ids: name, phone, mode, voice.'; }
+  else if(k==='details'){ if(analysed&&!popOpen()&&EXTRA.some(function(x){ var f=$('#f-'+x.id); return f&&f.parentNode!==$('#extraGrid'); })) finishAnalysis();
+    o=detailsOpener(); note='Step 2, prompt details, is on screen. Field ids: company, industry, agent (sales representative name), role, goal, language, tone, docs, guide.'; if(!o){ glAnalyse(); return; } }
+  else if(k==='upload'){ if(!upFile){ mark('up','active','Waiting'); o={line:S.upAsk}; } else { mark('up','done','Attached'); $('#upGo').classList.add('cue'); o={line:S.upGot[0]+' If they agree, press validate.'}; } note='Step 2, upload, is on screen.'; }
+  else if(k==='result'){ if(!promptText) return; $('#saveBtn').classList.add('cue'); o={line:'Your prompt is ready. I also created '+$('#anRows').children.length+' analytics fields and an analytics persona. Want to add anything, or shall I save it?'}; note='Step 3 is on screen with the generated prompt and analytics fields. If they want to save, press save.'; }
+  if(o.f) mark(o.f,'active','Asking'); glApp(note+' Say: '+o.line); }; }
+function glStop(){ GL.on=false; glHushAudio(); try{ if(GL.src) GL.src.disconnect(); if(GL.node){ GL.node.port.onmessage=null; GL.node.disconnect(); } }catch(e){} GL.src=GL.node=null; GL.closeAfter=false; GL.quiet=false; }
+function glClose(){ var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(1000,'done'); }catch(e){} } aiLiveLabel(); }
+function glDropped(){ GL.ws=null; aiLiveLabel(); if(!botOn) return; toast('Gemini Live disconnected. Continuing in turn-based mode.'); if(!busy) start(SCRIPT[stage]); }
+function aiLiveLabel(){ if(GL.on){ $('#dAi').textContent='AI: Gemini Live'; $('#dAi').className='ok'; $('#dAi').title='Connected over WebSocket to Gemini Live'; } else if(!aiDown) aiStatus(true); }
+
 
 /* ---------- dashboard (saved in this browser) ---------- */
 var LS='voice_assistants_demo';
 function loadList(){ try{ return JSON.parse(localStorage.getItem(LS)||'[]')||[]; }catch(e){ return []; } }
+var ICON={bot:'<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="8" width="16" height="12" rx="3"/><path d="M12 4v4M9 13h.01M15 13h.01M10 17h4"/></svg>',
+ dots:'<svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor"><circle cx="12" cy="5" r="1.8"/><circle cx="12" cy="12" r="1.8"/><circle cx="12" cy="19" r="1.8"/></svg>',
+ phone:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a2 2 0 0 1-2 2A16 16 0 0 1 3 6a2 2 0 0 1 2-2"/></svg>',
+ doc:'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5M9 13h6M9 17h6"/></svg>'};
+function saveList(list){ try{ localStorage.setItem(LS,JSON.stringify(list)); }catch(e){} renderDash(); }
 function renderDash(){ var list=loadList(), w=$('#dash'); w.innerHTML=''; $('#dashEmpty').hidden=list.length>0;
-  list.forEach(function(a){ var c=document.createElement('div'); c.className='tile';
-    c.innerHTML='<div class="rowBetween"><h4></h4><span class="tag ok">Active</span></div><div class="meta who"></div><div class="mono ph"></div><div class="meta vc"></div><details><summary>System prompt</summary><pre></pre></details><div class="rowBetween" style="margin-top:auto"><span class="meta dt"></span><button class="btn">Delete</button></div>';
-    c.querySelector('h4').textContent=a.name; c.querySelector('.who').textContent=[a.role,a.company].filter(Boolean).join(' · ')||'Voice assistant';
-    c.querySelector('.ph').textContent=a.phone||'No phone number'; c.querySelector('.vc').textContent=[a.voice,cap(a.mode||''),a.fields+' analytics fields'].filter(Boolean).join(' · ');
-    c.querySelector('pre').textContent=a.prompt||''; c.querySelector('.dt').textContent='Created '+new Date(a.created).toLocaleString();
-    c.querySelector('button').onclick=function(){ try{ localStorage.setItem(LS,JSON.stringify(loadList().filter(function(x){ return x.id!==a.id; }))); }catch(e){} renderDash(); };
+  list.forEach(function(a){ var c=document.createElement('div'), n=(a.docs||[]).length; c.className='tile';
+    c.innerHTML='<div class="tHead"><div class="tIcon">'+ICON.bot+'</div><div class="tt"><h4></h4><span class="pillOk">active</span></div><button class="kebab" aria-label="More actions" aria-haspopup="true">'+ICON.dots+'</button></div>'+
+      '<div class="menu" hidden><button data-a="edit">Edit</button><button data-a="dup">Duplicate</button><button data-a="del" class="del">Delete</button></div>'+
+      '<p class="tDesc"></p><div class="tRow ph">'+ICON.phone+'<span class="mono"></span></div><div class="tRow kb">'+ICON.doc+'<span></span></div>'+
+      '<div class="tCall"><input class="ctl" type="tel" placeholder="Enter your phone number" aria-label="Your phone number"><button class="btn">'+ICON.phone+'<span>Call</span></button></div>'+
+      '<button class="btn pri cfg">Configure</button>';
+    c.querySelector('h4').textContent=a.name; c.querySelector('h4').title=a.name;
+    c.querySelector('.tDesc').textContent=a.goal||[a.role,a.company].filter(Boolean).join(' · ')||'Voice assistant';
+    c.querySelector('.ph .mono').textContent=a.phone||'No phone number';
+    c.querySelector('.kb span').textContent=n+' knowledge base file'+(n===1?'':'s');
+    var menu=c.querySelector('.menu');
+    c.querySelector('.kebab').onclick=function(e){ e.stopPropagation(); var open=menu.hidden; closeMenus(); menu.hidden=!open; };
+    menu.onclick=function(e){ var act=e.target.getAttribute('data-a'); if(!act) return; menu.hidden=true;
+      if(act==='edit') editAssistant(a.id);
+      if(act==='dup'){ var copy=JSON.parse(JSON.stringify(a)); copy.id=Date.now(); copy.name=a.name+' (copy)'; copy.created=new Date().toISOString(); var l=loadList(), i=l.map(function(x){ return x.id; }).indexOf(a.id); l.splice(i+1,0,copy); saveList(l); toast('Duplicated '+a.name+'.'); }
+      if(act==='del'&&confirm('Delete '+a.name+'? This cannot be undone.')) saveList(loadList().filter(function(x){ return x.id!==a.id; })); };
+    var inp=c.querySelector('.tCall input'), cb=c.querySelector('.tCall .btn');
+    cb.onclick=function(){ demoCall(a,inp,cb); }; inp.onkeydown=function(e){ if(e.key==='Enter') demoCall(a,inp,cb); };
+    c.querySelector('.cfg').onclick=function(){ editAssistant(a.id); };
     w.appendChild(c); }); }
+function closeMenus(){ [].forEach.call(document.querySelectorAll('.tile .menu'),function(m){ m.hidden=true; }); }
+document.addEventListener('click',function(e){ if(!e.target.closest||!e.target.closest('.menu')) closeMenus(); });
+/* Call is demo-only: it checks the number and shows the call state, nothing is dialled */
+function demoCall(a,inp,cb){ var num=inp.value.replace(/[^\d+]/g,''), digits=num.replace(/\D/g,'');
+  if(digits.length<10){ toast('Enter a phone number with at least 10 digits.'); inp.focus(); return; }
+  if(cb.classList.contains('calling')) return;
+  var lab=cb.querySelector('span'); cb.classList.add('calling'); lab.textContent='Calling…';
+  toast(a.name+' is calling '+inp.value.trim()+(a.phone?' from '+a.phone:'')+'. Demo only: no real call is placed.');
+  setTimeout(function(){ cb.classList.remove('calling'); lab.textContent='Call'; },4000); }
+/* Edit and Configure open the builder filled with the saved assistant; saving updates that same card */
+var editId=null;
+function editAssistant(id){ var a=loadList().filter(function(x){ return x.id===id; })[0]; if(!a) return;
+  resetAll(); editId=id; $('#overlay').classList.add('on'); openForm();
+  function put(k,v){ var e=$('#i-'+k); if(!e||!v) return; if(e.tagName==='SELECT'){ if(![].some.call(e.options,function(o){ return o.value===v||o.textContent===v; })){ var o=document.createElement('option'); o.textContent=v; e.appendChild(o); } var m=[].filter.call(e.options,function(o){ return o.value===v||o.textContent===v; })[0]; e.value=m.value; } else e.value=v; asked[k]=true; mark(k,'done','Saved'); }
+  put('name',a.name); put('phone',a.phone); if(a.phone){ showPhoneChips(); }
+  if(a.mode){ setMode(a.mode); asked.mode=true; mark('mode','done','Saved'); var vs=$('#i-voice'), vo=[].filter.call(vs.options,function(o){ return o.textContent.split(' (')[0]===a.voice; })[0]; if(vo){ vs.value=vo.value; asked.voice=true; mark('voice','done','Saved'); } }
+  ['company','industry','agent','role','goal','language','tone','guide'].forEach(function(k){ put(k,a[k]); });
+  docs=(a.docs||[]).slice(); docs.forEach(function(d){ addFile('docFiles',d); }); if(a.docsSkipped) asked.docs=true;
+  if(a.guideSkipped) asked.guide=true;
+  EXTRA=(a.extra||[]).map(function(x){ return {id:x.id,label:x.label,question:x.question||'',placeholder:x.placeholder||''}; });
+  EXTRA.forEach(function(x,i){ $('#extraGrid').appendChild(extraField(x)); $('#i-'+x.id).value=(a.extra[i]||{}).value||''; mark(x.id,'done','Saved'); });
+  $('#extraBox').hidden=!EXTRA.length; analysed=!!(a.extra||a.prompt);
+  source=a.source||'gen'; upFile=a.upFile||''; if(upFile) addFile('upFiles',upFile);
+  promptText=a.prompt||''; $('#prompt').value=promptText; var w=promptText.split(/\s+/).filter(Boolean).length; $('#sWords').textContent=w; $('#sTok').textContent='~'+Math.round(w*1.35);
+  $('#resMode').textContent=source==='upload'?'Uploaded':(a.mode==='premium'?'Premium':'Standard');
+  $('#anRows').innerHTML=''; (a.analytics||[]).forEach(function(r){ addAn(r[0],r[1],r[2]); }); $('#i-persona').value=a.persona||'';
+  botOn=false; setStage('basics'); setQ('Editing '+a.name+'. Change anything in the three steps, then press Save Voice Assistant. Press Play if you want me to help.'); setYou(''); setOrb('idle'); refresh(); }
 
 async function askGenerate(t){ var g=$('#genBtn'); g.scrollIntoView({block:'center',behavior:'smooth'}); g.classList.add('cue'); await say(S.askGen[0],t); if(!autoAns) return; await wait(1800,t); await hear(S.askGen[1],t); await press(g,t); runFlow('gen'); }
 
@@ -802,6 +977,7 @@ $('#upDrop').onclick=function(){ pickFor='up'; $('#filePick').multiple=false; $(
 $('#filePick').onchange=function(e){ var fs=[].slice.call(e.target.files); if(!fs.length) return;
   if(pickFor==='doc'){ fs.forEach(function(f){ addFile('docFiles',f.name); docs.push(f.name); }); }
   else { attachPrompt(fs[0].name); if(botOn) start(SCRIPT.upload); }
+  if(pickFor==='doc'&&GL.on&&botOn){ asked.docs=true; mark('docs','done','Uploaded'); glApp('The person uploaded '+fs.map(function(f){ return f.name; }).join(', ')+'. The docs field is done. '+glNext()); }
   if(pickFor==='doc'&&waitRes) waitRes('[I uploaded the file '+fs.map(function(f){ return f.name; }).join(', ')+']');
   e.target.value=''; };
 
@@ -875,9 +1051,16 @@ $('#editBtn').onclick=function(){ var e=$('#prompt'); var on=e.readOnly; e.readO
 $('#regenBtn').onclick=function(){ runFlow(source||'gen'); };
 $('#dlBtn').onclick=function(){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([$('#prompt').value],{type:'text/markdown'})); a.download='system_prompt.md'; a.click(); };
 function save(){ run++; stopSpeech();
-  var item={id:Date.now(),name:val('name')||'Untitled assistant',phone:val('phone'),mode:mode,voice:($('#i-voice').value||'').split(' (')[0],company:val('company'),role:val('role'),fields:$('#anRows').children.length,prompt:$('#prompt').value,created:new Date().toISOString()};
-  var list=loadList(); list.unshift(item); try{ localStorage.setItem(LS,JSON.stringify(list)); }catch(e){} renderDash();
-  $('#doneSub').textContent=(val('name')||'Your assistant')+(val('phone')?' · '+val('phone'):'')+' is ready for calls.'; $('#done').classList.add('on'); if(botOn) start(async function(t){ await say(S.saved,t); }); }
+  var item={id:editId||Date.now(),name:val('name')||'Untitled assistant',phone:val('phone'),mode:mode,voice:($('#i-voice').value||'').split(' (')[0],
+    company:val('company'),industry:val('industry'),agent:val('agent'),role:val('role'),goal:val('goal'),language:val('language'),tone:val('tone'),guide:val('guide'),guideSkipped:!!asked.guide&&!val('guide'),
+    docs:docs.slice(),docsSkipped:!!asked.docs&&!docs.length,extra:EXTRA.map(function(x){ return {id:x.id,label:x.label,question:x.question,placeholder:x.placeholder,value:val(x.id)}; }),
+    source:source,upFile:upFile,prompt:$('#prompt').value,persona:$('#i-persona').value,
+    analytics:[].map.call($('#anRows').children,function(r){ var c=r.querySelectorAll('.ctl'); return [c[0].value,c[2].value,c[1].value]; }),
+    fields:$('#anRows').children.length,created:new Date().toISOString()};
+  var list=loadList(), at=editId?list.map(function(x){ return x.id; }).indexOf(editId):-1;
+  if(at>=0){ item.created=list[at].created; item.updated=new Date().toISOString(); list[at]=item; } else list.unshift(item);
+  $('#done h3').textContent=at>=0?'Voice assistant updated':'Voice assistant created'; editId=null; saveList(list);
+  $('#doneSub').textContent=(val('name')||'Your assistant')+(val('phone')?' · '+val('phone'):'')+' is ready for calls.'; $('#done').classList.add('on'); if(botOn) start(async function(t){ await say(S.saved,t); }); if(GL.on){ GL.closeAfter=true; setTimeout(function(){ if(GL.closeAfter) glCloseWhenQuiet(); },12000); } }
 
 /* ---------- controls ---------- */
 function clearStage(){ var ids=stage==='basics'?['name','phone','voice']:(stage==='details'?['company','industry','agent','role','goal','language','tone','guide','hours','handoff']:[]);
@@ -890,15 +1073,22 @@ $('#playBtn').onclick=function(){
   botOn=true; refresh(); if(busy) return; if(stage==='intro'){ start(SCRIPT.intro); return; } start(SCRIPT[stage]); };
 $('#redoBtn').onclick=function(){ if(stage==='intro'){ botOn=true; start(SCRIPT.intro); return; } if(stage==='result'){ runFlow(source||'gen'); return; } closePop(); busy=false; clearStage(); botOn=true; setStage(stage); start(SCRIPT[stage]); };
 $('#sndBtn').onclick=function(){ sound=!sound; if(!sound) stopSpeech(); refresh(); };
-function resetAll(){ run++; stopSpeech(); botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
+function resetAll(){ run++; stopSpeech(); glClose(); editId=null; botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
   ['basics','details','upload'].forEach(function(s){ stage=s; clearStage(); }); asked={}; partial={}; source=''; promptText=''; $('#prompt').value=''; $('#anRows').innerHTML=''; $('#i-persona').value=''; cnt();
   [].forEach.call(document.querySelectorAll('.cue'),function(b){ b.classList.remove('cue'); });
   $('#card').classList.remove('open'); $('#talk').hidden=true; setStage('intro'); setQ(''); setYou(''); setOrb('idle'); }
 function closeAll(){ resetAll(); releaseMic(); $('#overlay').classList.remove('on'); }
 function openDemo(){ resetAll(); if(aiDown){ aiDown=false; pingAi(); } $('#overlay').classList.add('on'); botOn=true; refresh();
   var t0=run, ask=setTimeout(function(){ if(run===t0) setQ('Please allow the microphone so I can hear you.'); },400);
-  warmMic().then(function(){ clearTimeout(ask); if(run===t0&&botOn) start(SCRIPT.intro); }); }
+  if(live) glPrime(); /* audio needs this click */
+  warmMic().then(function(){ clearTimeout(ask); if(run!==t0||!botOn) return;
+    if(!live||aiDown) return start(SCRIPT.intro);
+    setQ('Connecting to Gemini Live…');
+    return glConnect().then(function(){ aiLiveLabel(); }, function(e){ toast((e&&e.message||'Gemini Live is not available')+'. Using turn-based mode.'); })
+      .then(function(){ if(run===t0&&botOn) start(SCRIPT.intro); }); }); }
 $('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
+$('#demoTog').onclick=function(){ var h=$('#demo').classList.toggle('hide'); this.classList.toggle('on',!h); this.setAttribute('aria-label',h?'Show demo controls':'Hide demo controls'); };
+if(params.has('demo')){ $('#demo').classList.remove('hide'); $('#demoTog').classList.add('on'); }
 $('#dAuto').onclick=function(){ autoAns=!autoAns; this.textContent='Auto-answer: '+(autoAns?'on':'off'); this.classList.toggle('on',autoAns); };
 $('#dUser').onclick=function(){ speakAns=!speakAns; this.textContent='Speak answers: '+(speakAns?'on':'off'); this.classList.toggle('on',speakAns); };
 $('#dLive').onclick=function(){ setLive(!live); if(botOn&&!busy&&stage!=='intro') start(SCRIPT[stage]); else if(botOn&&stage==='intro') start(SCRIPT.intro); };

@@ -8,13 +8,25 @@ assistant to the dashboard.
 
 | Part | Status |
 | --- | --- |
-| Conversation, field filling, missing-detail analysis, system prompt, analytics fields | Real, done by Gemini |
+| Conversation and field filling | Real: Gemini Live (`gemini-3.8-live`) over one WebSocket per build. Gemini hears the mic, speaks in an Indian English voice and fills fields through tool calls |
+| Missing-detail analysis, system prompt, analytics fields | Real, Gemini text models (the Live model answers only in audio) |
+| Dashboard cards | Edit and Configure reopen the builder with the saved values, Duplicate, Delete. Call is demo only: nothing is dialled |
 | Speech input | Real, browser speech recognition (Chrome or Edge), with a text box fallback |
 | Bot voice | Browser voice by default (best Indian English voice found, pick another in the demo bar). Gemini voice (Indian English, `en-in-concierge-2`) with the Bot voice toggle or `?geminivoice=1` |
 | Document upload, validation, simulation | Demo only (animation) |
 | Saving | Saved in the browser (localStorage), shown on the Assistants page |
 
 Nothing is filled in until the user answers. If a Gemini call fails (quota, timeout, overload), the server first tries the next model. If that fails too, the demo bar shows "AI: offline" and the bot keeps going for about 20 seconds by writing down what the user says (it skips questions, stalls and bare yes/no), then tries Gemini again. The scripted self-playing run only starts if you switch Mode to scripted.
+
+## How the Live connection works
+
+1. Create Assistant asks for the mic once, then the page asks `/api/agent` (`kind: live`) for a short-lived token.
+2. The server creates the token with the bot's instructions, tools and voice locked in, so the page cannot change them and never sees the API key.
+3. The browser opens one WebSocket straight to Gemini Live and keeps it for the whole build. It is closed after the assistant is saved, or when the builder is closed.
+4. The mic is not streamed while the bot's audio plays, so the bot does not hear itself.
+5. If Live cannot connect or drops, the page switches to the turn-based mode (Gemini text + browser speech).
+
+This works on Vercel because the WebSocket goes from the browser to Google, not through a Vercel function.
 
 ## Files
 
@@ -29,6 +41,8 @@ Nothing is filled in until the user answers. If a Gemini call fails (quota, time
 - `GEMINI_MODEL` (optional, default tries `gemini-3.5-flash-lite` then `gemini-3.8-flash`)
 - `GEMINI_TTS_VOICE` (optional, default `en-in-concierge-2`, female Indian English). Other Indian voices: `en-in-csagent-5`, `en-in-assistant-3`, `en-in-podcaster-4`, or list them with `GET https://generativelanguage.googleapis.com/v1beta/voices?language_code=en-IN`
 - `GEMINI_TTS_MODEL` (optional, default tries `gemini-3.8-flash-lite-tts` then `gemini-3.8-flash-tts`)
+- `GEMINI_LIVE_MODEL` (optional, default `gemini-3.8-live`)
+- `GEMINI_LIVE_VOICE` (optional, default `GEMINI_TTS_VOICE` or `en-in-concierge-2`)
 
 ### Free tier limits (measured October 2026)
 
@@ -64,6 +78,9 @@ Always use http://localhost:3000, not the `index.html` file. Opened as a file, C
 `MOCK_AGENT=1 node server.js` runs without a key, using a simple built-in mock.
 
 ## Demo bar
+
+Hidden by default. Click the small round button at the bottom right to show it, or open the page with `?demo=1`.
+
 
 - Restart: start the flow again
 - Mode: live AI or scripted (scripted plays sample answers by itself)

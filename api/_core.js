@@ -182,6 +182,54 @@ async function callTTS(text) {
   throw Object.assign(lastErr || new Error('No Gemini TTS model available'), { status: lastErr && lastErr.status === 429 ? 429 : 502 });
 }
 
+/* ---- Gemini Live: one WebSocket per build, opened by the browser straight to Gemini with a short-lived token.
+   The instructions, tools and voice are locked into the token here, so the key and the bot's rules never reach the page.
+   gemini-3.8-live answers only in audio, so the system prompt and the analysis stay on the text models above. ---- */
+const LIVE_WS = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
+const LIVE_SYSTEM = [
+  'You are the voice setup assistant inside a "Create Voice Assistant" form on a voice AI platform. You talk with the person who is building a phone assistant and you fill in the form for them while they watch.',
+  'Speak natural Indian English. Keep every turn to one or two short sentences and ask for one field at a time. No lists, no markdown.',
+  '',
+  'Messages that start with [App] come from the app, not from the person. They tell you what is on screen and what to ask. Never read them aloud and never mention the app. When an [App] message or a tool result contains "Say:" followed by a line, say that line in your own natural words, keep its meaning, and add nothing else.',
+  '',
+  'The form changes only through your tools. Whenever the person answers a field, call update_form before you speak, then follow the next instruction in its result. Never say a field is set unless update_form returned ok. Rules for update_form: only write what the person actually said in their latest answer; never guess, never use examples or placeholders, never fill a field they did not answer. For a select field copy one of its options exactly. Clean up capitalisation and obvious speech recognition slips. A bare yes, ok or go ahead fills nothing, unless you just recommended one specific option for the field you were asking about; then fill that option. If they decline an optional field use the value skip; never skip a required field, instead say briefly why it is needed and ask again. If they correct an earlier answer, update that field. If they ask you something, answer in one sentence and ask again.',
+  '',
+  'Call press_button only when the person clearly asks for it. At the start: build_with_ai if they want you to build it with them (any wording: build with you, let us build it with you, do it together, you do it, do it for me, AI please, automatic, go ahead, yes, or a misheard version like bill with you) or build_manually if they want to fill it in themselves (manual, myself, let me do it, I will type it). After the basics: upload_prompt or generate_with_ai. After the details: generate_prompt. After an upload: validate. At the end: save. After press_button, follow the Say line in its result.',
+  'Only the person can upload files: if they want to add a document, tell them to click the upload box. Use add_analytics_field only when they ask for an extra analytics field at the end.'
+].join('\n');
+const LIVE_TOOLS = [{ functionDeclarations: [
+  { name: 'update_form', description: 'Write the person\'s answers into form fields. Returns ok, the current form and what to ask next.',
+    parameters: { type: 'OBJECT', properties: { updates: { type: 'ARRAY', items: { type: 'OBJECT', properties: { id: { type: 'STRING', description: 'Field id' }, value: { type: 'STRING' } }, required: ['id', 'value'] } } }, required: ['updates'] } },
+  { name: 'press_button', description: 'Press a button in the form for the person.',
+    parameters: { type: 'OBJECT', properties: { button: { type: 'STRING', enum: ['build_with_ai', 'build_manually', 'upload_prompt', 'generate_with_ai', 'generate_prompt', 'validate', 'save'] } }, required: ['button'] } },
+  { name: 'add_analytics_field', description: 'Add an analytics field to the generated assistant.',
+    parameters: { type: 'OBJECT', properties: { name: { type: 'STRING', description: 'snake_case' }, description: { type: 'STRING' }, type: { type: 'STRING', enum: ['String', 'Number', 'Boolean', 'Date'] } }, required: ['name', 'description', 'type'] } }
+] }];
+
+async function liveToken() {
+  const key = process.env.GEMINI_API_KEY;
+  if (!key) throw Object.assign(new Error('GEMINI_API_KEY is not set on the server'), { status: 500 });
+  const model = process.env.GEMINI_LIVE_MODEL || 'gemini-3.8-live';
+  const now = Date.now();
+  const r = await fetch('https://generativelanguage.googleapis.com/v1beta/auth_tokens', {
+    method: 'POST', headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
+    body: JSON.stringify({
+      uses: 1, expireTime: new Date(now + 30 * 60e3).toISOString(), newSessionExpireTime: new Date(now + 60e3).toISOString(),
+      bidiGenerateContentSetup: {
+        model: 'models/' + model,
+        generationConfig: { responseModalities: ['AUDIO'], temperature: 0.4,
+          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.GEMINI_LIVE_VOICE || process.env.GEMINI_TTS_VOICE || DEFAULT_TTS_VOICE } } } },
+        systemInstruction: { parts: [{ text: LIVE_SYSTEM }] },
+        tools: LIVE_TOOLS,
+        inputAudioTranscription: {}, outputAudioTranscription: {}
+      }
+    })
+  });
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.name) throw Object.assign(new Error((d.error && d.error.message) || 'Could not create a Gemini Live token'), { status: r.status === 429 ? 429 : 502 });
+  return { token: d.name, model: model, url: LIVE_WS };
+}
+
 /* ---- offline mock (MOCK_AGENT=1) so the UI can be tested without a key ---- */
 function mock(kind, b) {
   if (kind === 'analyze') return { missing: [{ id: 'working_hours', label: 'Working hours', question: 'What are your working hours?', placeholder: 'Mon to Fri, 9 am to 6 pm' }, { id: 'human_handoff', label: 'Human handoff', question: 'Who should take over when a caller needs a human?', placeholder: 'Front desk line' }] };
@@ -231,13 +279,17 @@ async function handle(body) {
   try {
     const b = body && typeof body === 'object' ? body : {};
     const kind = clip(b.kind, 12);
-    if (!['turn', 'analyze', 'prompt', 'tts', 'ping'].includes(kind)) return { status: 400, json: { error: 'Unknown kind' } };
+    if (!['turn', 'analyze', 'prompt', 'tts', 'ping', 'live'].includes(kind)) return { status: 400, json: { error: 'Unknown kind' } };
     if (limited()) return { status: 429, json: { error: 'Too many requests, try again in a minute' } };
     const fields = cleanFields(b.fields);
     if (kind === 'ping') {
       if (process.env.MOCK_AGENT) return { status: 200, json: { ok: true, model: 'mock' } };
       await callGemini('Reply with the JSON object {"ok":true} and nothing else.', { ping: 1 }, 256, 0, 10000, { fast: true });
       return { status: 200, json: { ok: true } };
+    }
+    if (kind === 'live') {
+      if (process.env.MOCK_AGENT) return { status: 501, json: { error: 'No Gemini Live in mock mode' } };
+      return { status: 200, json: await liveToken() };
     }
     if (kind === 'tts') {
       if (process.env.MOCK_AGENT) return { status: 501, json: { error: 'No voice in mock mode' } };
