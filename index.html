@@ -285,7 +285,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
           <div class="box">
             <h3>Assistant identity and contact line</h3>
             <div class="grid2">
-              <div class="field" id="f-name"><div class="lab"><label for="i-name">Assistant name <i>*</i></label><span class="badge"></span></div>
+              <div class="field" id="f-name"><div class="lab"><label for="i-name">Voice agent name <i>*</i></label><span class="badge"></span></div>
                 <input class="ctl" id="i-name" placeholder="e.g. Sales Support"></div>
               <div class="field" id="f-phone"><div class="lab"><label for="i-phone">Phone number <i>*</i></label><span class="badge"></span></div>
                 <select class="ctl" id="i-phone"><option value="">Choose a number</option></select></div>
@@ -333,7 +333,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
               <div class="field" id="f-company"><div class="lab"><label for="i-company">Company name <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-company" placeholder="AI will ask about this"></div>
               <div class="field" id="f-industry"><div class="lab"><label for="i-industry">Domain or industry <i>*</i></label><span class="badge"></span></div>
                 <select class="ctl" id="i-industry"><option value="">Choose an industry</option><option>Healthcare &amp; Clinics</option><option>Retail &amp; E-commerce</option><option>Real Estate</option><option>Education</option><option>Financial Services</option></select></div>
-              <div class="field" id="f-agent"><div class="lab"><label for="i-agent">Agent name <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-agent" placeholder="AI will ask about this"></div>
+              <div class="field" id="f-agent"><div class="lab"><label for="i-agent">Sales representative name <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-agent" placeholder="e.g. Maya, Arya, Anisha"></div>
               <div class="field" id="f-role"><div class="lab"><label for="i-role">Agent role <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-role" placeholder="AI will ask about this"></div>
             </div>
             <div class="field" id="f-goal"><div class="lab"><label for="i-goal">Agent goal <i>*</i></label><span class="badge"></span></div><textarea class="ctl" id="i-goal" rows="3" placeholder="AI will ask about this"></textarea></div>
@@ -426,21 +426,21 @@ var $=function(s){return document.querySelector(s);};
 var params=new URLSearchParams(location.search);
 
 /* ---------- sample content (edit here) ---------- */
-var PHONES=[['+1 (555) 349-2041','US inbound line',true],['+1 (555) 349-2087','US outbound line'],['+1 (800) 555-0142','Toll-free']];
+var PHONES=[['+91 80 4718 2290','Bengaluru inbound line',true],['+91 22 6912 4405','Mumbai inbound line'],['+91 11 4083 7716','Delhi inbound line'],['+91 44 6631 9058','Chennai outbound line'],['1800 309 4412','Toll-free']];
 var VOICES={standard:[['Anisha (Female, Indian) · Recommended'],['Arjun (Male, Indian)'],['Maya (Female, US)']],premium:[['Aria (Female, expressive) · Recommended'],['Kiran (Male, warm)'],['Nova (Female, neutral)']]};
 var MODE_NOTE={standard:'Standard cascaded: Deepgram STT · AWS Bedrock Nova Pro · Falcon 2 TTS',premium:'Premium: speech-to-speech (Live API)'};
 var ANALYTICS=[['patient_name','String','Full name of the patient or caller'],['treatment_inquired','String','Treatment or visit reason the caller asked about'],['insurance_carrier','String','Dental insurance mentioned by the caller'],['appointment_date','Date','Date the caller wants to come in'],['appointment_booked','Boolean','Whether the call ended with a booked appointment'],['caller_sentiment','String','Positive, neutral or negative']];
 var PERSONA='You are analyzing calls for {company}, a dental clinic. Each call is a patient asking about treatments, insurance or appointments. Extract the fields above exactly as the caller said them.';
 var S={
  intro:['Hi! Do you want to build this assistant manually, or should I build it for you?','Build it for me.'],
- name:['Great, let us build it together. What should we call this assistant?','Call it Apex Dental Patient Advisor.','Apex Dental Patient Advisor'],
- phone:['I found three numbers on your account. I suggest the US inbound line. Shall I use it?','Yes, use that one.'],
+ name:['Great, let us build it together. What should we call this voice agent?','Call it Apex Dental Patient Advisor.','Apex Dental Patient Advisor'],
+ phone:['I found five numbers on your account. I suggest the Bengaluru inbound line. Shall I use it?','Yes, use that one.'],
  mode:['Standard or premium voice mode?','Standard.'],
  voice:['For Standard, I recommend Anisha. Should I pick her?','Yes, Anisha is perfect.'],
  source:['Last thing here. Do you have a system prompt to upload, or should I generate one with you?','Generate it with me.'],
  company:['Let us write the system prompt. What is the company name?','Apex Dental Care.','Apex Dental Care'],
  industry:['Which domain or industry is it in?','Healthcare. It is a dental clinic.','Healthcare & Clinics'],
- agent:['What name should the agent use on calls?','Anisha.','Anisha'],
+ agent:['What name should the sales representative use on calls? For example Maya or Arya.','Anisha.','Anisha'],
  role:['And what is her role?','Patient coordinator and front desk specialist.','Patient Coordinator & Front-Desk Specialist'],
  goal:['What is her goal on a call?','Greet callers warmly, answer questions about cleaning, whitening and emergency visits, check insurance, and book appointments.','Greet callers warmly, answer questions about cleaning, whitening and emergency dental appointments, check insurance compatibility, and book appointments.'],
  language:['Which languages should she speak?','English, and Hindi if the caller prefers.','English and Hindi'],
@@ -450,7 +450,7 @@ var S={
  analyze:'Give me a moment to check what I have.',
  missing:'Two details are missing. I have added them here.',
  hours:['What are your working hours?','Monday to Friday eight to six, and Saturday nine to two.','Mon to Fri 8 am to 6 pm, Sat 9 am to 2 pm'],
- handoff:['Where should I transfer a caller who needs a human?','To the front desk line.','Front desk line, +1 (555) 349-2000'],
+ handoff:['Where should I transfer a caller who needs a human?','To the front desk line.','Front desk line, +91 80 4718 2200'],
  askGen:['That is everything I need. Shall I generate the prompt?','Yes, go ahead.'],
  upAsk:'Drop your system prompt file here, or click to choose it.',
  upGot:['Got it. Shall I validate and test it?','Yes, please.'],
@@ -680,14 +680,14 @@ $('#micBtn').onclick=function(){ if(!micOk){ toast('Speech recognition is not av
 function optsOf(id){ return [].map.call($('#i-'+id).options,function(o){ return o.value?o.textContent:''; }).filter(Boolean); }
 function selText(id){ var e=$('#i-'+id); return e.value?e.options[e.selectedIndex].textContent:''; }
 function schema(){ var L=[]; function add(id,label,type,value,options,required){ var o={id:id,label:label,type:type,value:value||'',required:required!==false}; if(options) o.options=options; L.push(o); }
-  if(stage==='basics'){ add('name','Assistant name','text',val('name')); add('phone','Phone number','select',selText('phone'),optsOf('phone')); add('mode','Voice mode','select',cap(mode),['Standard','Premium']); add('voice','Voice','select',selText('voice'),mode?optsOf('voice'):['Choose the voice mode first']); }
-  else if(stage==='details'&&!analysed){ add('company','Company name','text',val('company')); add('industry','Domain or industry','select',selText('industry'),optsOf('industry')); add('agent','Agent name','text',val('agent')); add('role','Agent role','text',val('role')); add('goal','Agent goal','text',val('goal')); add('language','Language requirements','select',selText('language'),optsOf('language')); add('tone','Agent tone','select',selText('tone'),optsOf('tone'));
+  if(stage==='basics'){ add('name','Voice agent name','text',val('name')); add('phone','Phone number','select',selText('phone'),optsOf('phone')); add('mode','Voice mode','select',cap(mode),['Standard','Premium']); add('voice','Voice','select',selText('voice'),mode?optsOf('voice'):['Choose the voice mode first']); }
+  else if(stage==='details'&&!analysed){ add('company','Company name','text',val('company')); add('industry','Domain or industry','select',selText('industry'),optsOf('industry')); add('agent','Sales representative name','text',val('agent')); add('role','Agent role','text',val('role')); add('goal','Agent goal','text',val('goal')); add('language','Language requirements','select',selText('language'),optsOf('language')); add('tone','Agent tone','select',selText('tone'),optsOf('tone'));
     add('docs','Company documents (file upload)','file',docs.length?docs.join(', '):(asked.docs?'skip':''),null,false); add('guide','Guidelines or restrictions','text',val('guide')||(asked.guide?'skip':''),null,false); }
   else if(stage==='details'){ EXTRA.forEach(function(x){ add(x.id,x.label,'text',val(x.id)); }); }
   return L; }
 function allFields(){ var L=[]; function a(l,v){ L.push({label:l,value:v||''}); }
-  a('Assistant name',val('name')); a('Voice mode',mode); a('Voice',selText('voice').split(' (')[0]);
-  a('Company name',val('company')); a('Domain or industry',selText('industry')); a('Agent name',val('agent')); a('Agent role',val('role')); a('Agent goal',val('goal')); a('Language requirements',selText('language')); a('Agent tone',selText('tone')); a('Documents uploaded',docs.join(', ')); a('Guidelines or restrictions',val('guide'));
+  a('Voice agent name',val('name')); a('Voice mode',mode); a('Voice',selText('voice').split(' (')[0]);
+  a('Company name',val('company')); a('Domain or industry',selText('industry')); a('Sales representative name',val('agent')); a('Agent role',val('role')); a('Agent goal',val('goal')); a('Language requirements',selText('language')); a('Agent tone',selText('tone')); a('Documents uploaded',docs.join(', ')); a('Guidelines or restrictions',val('guide'));
   EXTRA.forEach(function(x){ a(x.label,val(x.id)); }); return L; }
 function matchOption(el,v){ var n=function(s){ return String(s).toLowerCase().replace(/[^a-z0-9+]+/g,' ').trim(); }, want=n(v), os=[].filter.call(el.options,function(o){ return o.value; });
   return os.filter(function(o){ return n(o.textContent)===want; })[0]||os.filter(function(o){ var x=n(o.textContent); return x.indexOf(want)===0||want.indexOf(x)===0; })[0]||os.filter(function(o){ var x=n(o.textContent); return x.indexOf(want)>=0||want.indexOf(n(o.value))>=0; })[0]||null; }
@@ -857,7 +857,7 @@ function runFlow(kind){ source=kind; $('#genBtn').classList.remove('cue');
 $('#genBtn').onclick=function(){ runFlow('gen'); };
 
 /* ---------- result ---------- */
-function buildResult(kind,out){ var c=val('company')||'[COMPANY NAME]', ag=val('agent')||'[AGENT NAME]', vn=($('#i-voice').value||'').split(' (')[0];
+function buildResult(kind,out){ var c=val('company')||'[COMPANY NAME]', ag=val('agent')||'[SALES REPRESENTATIVE NAME]', vn=($('#i-voice').value||'').split(' (')[0];
   if(kind==='upload'){ promptText='# System Prompt (uploaded): '+(upFile||'system_prompt.md')+'\n\n[The contents of your uploaded system prompt appear here.]\n\nValidation: required sections found.\nSimulation: 3 of 3 example calls passed.'; }
   else promptText='# System Prompt: '+c+' Voice Assistant\n## Voice mode: '+(mode==='premium'?'Premium (speech-to-speech)':'Standard (cascaded)')+(vn?' · Voice: '+vn:'')+'\n\n### 1. Identity and Core Mission\nYou are '+ag+', the '+(val('role')||'[ROLE]')+' for '+c+' ('+(val('industry')||'[INDUSTRY]')+').\nYour primary objective is to: '+(val('goal')||'[GOAL]')+'\nTone and demeanor: '+(val('tone')||'[TONE]')+'. Language: '+(val('language')||'[LANGUAGE]')+'.\nYou are speaking over a live telephone call.\n\n### 2. Call Flow\n1. Greet the caller and introduce yourself by name.\n2. Ask one short question to find out why they are calling.\n3. Answer only from the reference documents. Keep every turn to one or two sentences.\n4. Offer to book an appointment and repeat the details back to confirm.\n\n### 3. Business Facts\n'+(EXTRA.length?EXTRA.map(function(x){ return x.label+': '+(val(x.id)||'['+x.label.toUpperCase()+']'); }).join('\n'):'Working hours: [WORKING HOURS]')+'\nReference documents: '+(docs.length?docs.join(', '):'none uploaded')+'\n\n### 4. Guardrails\n'+(val('guide')||'No extra restrictions provided.')+'\nSay numbers and prices as words. Never invent prices, hours or policies.';
   var an=ANALYTICS, persona=kind==='upload'?'':PERSONA.replace('{company}',c);
