@@ -18,6 +18,13 @@ assistant to the dashboard.
 
 Nothing is filled in until the user answers. If a Gemini call fails (quota, timeout, overload), the server first tries the next model. If that fails too, the demo bar shows "AI: offline" and the bot keeps going for about 20 seconds by writing down what the user says (it skips questions, stalls and bare yes/no), then tries Gemini again. The scripted self-playing run only starts if you switch Mode to scripted.
 
+## Build-with-me flow
+
+1. The bot asks: build it with me, or manually? Manual opens the form straight away.
+2. Build with me: voice only. The bot asks every question by voice, including the extra ones the analysis finds missing, and fills the form behind the scenes. Only a progress line is shown.
+3. The form opens, filled in, when the person has to do something by hand: upload company documents (generate path) or upload a system prompt (upload path). The bot points at the upload box.
+4. Then generate, review and save as before. Pausing the bot also opens the form.
+
 ## How the Live connection works
 
 1. Create Assistant asks for the mic once, then the page asks `/api/agent` (`kind: live`) for a short-lived token.
