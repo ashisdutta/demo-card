@@ -13,7 +13,8 @@ assistant to the dashboard.
 | Dashboard cards | Edit and Configure reopen the builder with the saved values, Duplicate, Delete. Call is demo only: nothing is dialled |
 | Speech input | Real, browser speech recognition (Chrome or Edge), with a text box fallback |
 | Bot voice | Browser voice by default (best Indian English voice found, pick another in the demo bar). Gemini voice (Indian English, `en-in-concierge-2`) with the Bot voice toggle or `?geminivoice=1` |
-| Document upload, validation, simulation | Demo only (animation) |
+| Company documents | Real: PDF and images go to Gemini, Word and text files are read in the browser (up to 3 files, about 3 MB). The analysis fills details it finds in them and asks only for what is still missing; their key facts go into the system prompt |
+| System prompt upload, validation, simulation | Demo only (animation) |
 | Saving | Saved in the browser (localStorage), shown on the Assistants page |
 
 Nothing is filled in until the user answers. If a Gemini call fails (quota, timeout, overload), the server first tries the next model. If that fails too, the demo bar shows "AI: offline" and the bot keeps going for about 20 seconds by writing down what the user says (it skips questions, stalls and bare yes/no), then tries Gemini again. The scripted self-playing run only starts if you switch Mode to scripted.
@@ -23,7 +24,8 @@ Nothing is filled in until the user answers. If a Gemini call fails (quota, time
 1. The bot asks: build it with me, or manually? Manual opens the form straight away.
 2. Build with me: voice only. The bot asks every question by voice, including the extra ones the analysis finds missing, and fills the form behind the scenes. Only a progress line is shown.
 3. The form opens, filled in, when the person has to do something by hand: upload company documents (generate path) or upload a system prompt (upload path). The bot points at the upload box.
-4. Then generate, review and save as before. Pausing the bot also opens the form.
+4. After the documents are uploaded (or skipped), the analysis reads them with the answers. Details found in the documents are filled in and marked "From documents"; the bot asks only for what is still missing.
+5. Then generate, review and save as before. Pausing the bot also opens the form.
 
 ## How the Live connection works
 

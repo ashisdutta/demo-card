@@ -476,8 +476,7 @@ var S={
  guide:['Any guidelines or restrictions I should follow? This one is optional.','Never give medical advice, and transfer emergencies to a human.','Never give medical advice. Transfer emergencies to a human right away.'],
  analyze:'Give me a moment to check what I have.',
  missing:'Two details are missing. I have added them here.',
- missingTalk:'Two more details and we are done.',
- docsReveal:'I have filled in everything you told me, so take a look. If you have documents about your services or prices, upload them in this box, or say skip.',
+ docsReveal:'I have filled in everything you told me, so take a look. If you have documents about your services or prices, upload them in this box and I will read them, or say skip.',
  hours:['What are your working hours?','Monday to Friday eight to six, and Saturday nine to two.','Mon to Fri 8 am to 6 pm, Sat 9 am to 2 pm'],
  handoff:['Where should I transfer a caller who needs a human?','To the front desk line.','Front desk line, +91 80 4718 2200'],
  askGen:['That is everything I need. Shall I generate the prompt?','Yes, go ahead.'],
@@ -501,6 +500,7 @@ var SIM=[['Caller','Hi, do you take Delta Dental?'],['Agent','Yes, we accept Del
 var run=0, botOn=false, busy=false, stage='intro', sound=!params.has('mute'), autoAns=true, speakAns=false, live=!params.has('scripted'), gemVoice=params.has('geminivoice'), gemAudio=null, ttsCache={}, aiDown=false, aiDownAt=0;
 var DEF_EXTRA=[{id:'hours',label:'Working hours',question:'What are your working hours?',placeholder:'e.g. Mon to Fri, 9 am to 6 pm'},{id:'handoff',label:'Human handoff',question:'Where should I transfer a caller who needs a human?',placeholder:'Who should take over a call'}], EXTRA=[];
 var TALK=false; /* build-with-me: the bot collects answers by voice while the form stays hidden */
+var docData=[], docFacts='', progMax=0; /* uploaded document contents for the analysis, and the key facts it returns */
 var promptText='', mode='', asked={}, partial={}, docs=[], upFile='', analysed=false, source='';
 function Cancel(){} Cancel.prototype=Object.create(Error.prototype);
 var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
@@ -621,11 +621,9 @@ var SIMS={
    await ask('goal',S.goal,function(t){ return typeText('goal',S.goal[2],t); },t);
    await ask('language',S.language,async function(t){ $('#i-language').value=S.language[2]; await wait(300,t); },t);
    await ask('tone',S.tone,async function(t){ $('#i-tone').value=S.tone[2]; await wait(300,t); },t);
-   if(!TALK) await ask('docs',S.docs,async function(t){ addFile('docFiles',S.docs[2]); docs.push(S.docs[2]); await wait(1300,t); },t);
    await ask('guide',S.guide,function(t){ return typeText('guide',S.guide[2],t); },t);
-   await analyse(t);
    if(!has('docs')){ var dl=askDocs(); await wait(800,t); await ask('docs',[dl,S.docs[1]],async function(t){ addFile('docFiles',S.docs[2]); docs.push(S.docs[2]); await wait(1300,t); },t); }
-   await askGenerate(t); },
+   await analyse(t); await askGenerate(t); },
  upload:async function(t){ await wait(500,t);
    if(!upFile){ mark('up','active','Waiting'); await say(S.upAsk,t); if(!autoAns) return; await wait(2400,t); attachPrompt('apex_dental_system_prompt.md'); await wait(1300,t); }
    mark('up','done','Attached'); await say(S.upGot[0],t); $('#upGo').classList.add('cue'); if(!autoAns) return; await wait(1800,t); await hear(S.upGot[1],t); await press($('#upGo'),t); runFlow('upload'); },
@@ -714,16 +712,16 @@ function selText(id){ var e=$('#i-'+id); return e.value?e.options[e.selectedInde
 function schema(){ var L=[]; function add(id,label,type,value,options,required){ var o={id:id,label:label,type:type,value:value||'',required:required!==false}; if(options) o.options=options; L.push(o); }
   if(stage==='basics'){ add('name','Voice agent name','text',val('name')); add('phone','Phone number','select',selText('phone'),optsOf('phone')); add('mode','Voice mode','select',cap(mode),['Standard','Premium']); add('voice','Voice','select',selText('voice'),mode?optsOf('voice'):['Choose the voice mode first']); }
   else if(stage==='details'&&!analysed){ add('company','Company name','text',val('company')); add('industry','Domain or industry','select',selText('industry'),optsOf('industry')); add('agent','Sales representative name','text',val('agent')); add('role','Agent role','text',val('role')); add('goal','Agent goal','text',val('goal')); add('language','Language requirements','select',selText('language'),optsOf('language')); add('tone','Agent tone','select',selText('tone'),optsOf('tone'));
-    if(!TALK) add('docs','Company documents (file upload)','file',docs.length?docs.join(', '):(asked.docs?'skip':''),null,false); add('guide','Guidelines or restrictions','text',val('guide')||(asked.guide?'skip':''),null,false); }
+    add('guide','Guidelines or restrictions','text',val('guide')||(asked.guide?'skip':''),null,false); add('docs','Company documents (file upload)','file',docs.length?docs.join(', '):(asked.docs?'skip':''),null,false); }
   else if(stage==='details'){ EXTRA.forEach(function(x){ add(x.id,x.label,'text',val(x.id)); }); add('docs','Company documents (file upload)','file',docs.length?docs.join(', '):(asked.docs?'skip':''),null,false); }
   return L; }
 function allFields(){ var L=[]; function a(l,v){ L.push({label:l,value:v||''}); }
   a('Voice agent name',val('name')); a('Voice mode',mode); a('Voice',selText('voice').split(' (')[0]);
-  a('Company name',val('company')); a('Domain or industry',selText('industry')); a('Sales representative name',val('agent')); a('Agent role',val('role')); a('Agent goal',val('goal')); a('Language requirements',selText('language')); a('Agent tone',selText('tone')); a('Documents uploaded',docs.join(', ')); a('Guidelines or restrictions',val('guide'));
+  a('Company name',val('company')); a('Domain or industry',selText('industry')); a('Sales representative name',val('agent')); a('Agent role',val('role')); a('Agent goal',val('goal')); a('Language requirements',selText('language')); a('Agent tone',selText('tone')); a('Documents uploaded',docs.join(', ')); a('Key facts from the documents',docFacts); a('Guidelines or restrictions',val('guide'));
   EXTRA.forEach(function(x){ a(x.label,val(x.id)); }); return L; }
 function matchOption(el,v){ var n=function(s){ return String(s).toLowerCase().replace(/[^a-z0-9+]+/g,' ').trim(); }, want=n(v), os=[].filter.call(el.options,function(o){ return o.value; });
   return os.filter(function(o){ return n(o.textContent)===want; })[0]||os.filter(function(o){ var x=n(o.textContent); return x.indexOf(want)===0||want.indexOf(x)===0; })[0]||os.filter(function(o){ var x=n(o.textContent); return x.indexOf(want)>=0||want.indexOf(n(o.value))>=0; })[0]||null; }
-function detailsDone(){ return ['company','industry','agent','role','goal','language','tone'].every(function(k){ return val(k); })&&(TALK||docs.length>0||asked.docs)&&(val('guide')||asked.guide); }
+function detailsDone(){ return ['company','industry','agent','role','goal','language','tone'].every(function(k){ return val(k); })&&(docs.length>0||asked.docs)&&(val('guide')||asked.guide); }
 function extrasDone(){ return EXTRA.every(function(x){ return val(x.id); }); }
 function popOpen(){ return $('#pop').classList.contains('on'); }
 function cueSource(){ $('#f-source').scrollIntoView({block:'center',behavior:'smooth'}); $('#srcGen').classList.add('cue'); $('#srcUp').classList.add('cue'); }
@@ -743,27 +741,29 @@ async function applyUpdates(us,t){ for(var k=0;k<us.length;k++){ var id=String(u
 
 /* analysis: the model decides what is missing and the inputs are created on the fly */
 function extraField(x){ var d=document.createElement('div'); d.className='field'; d.id='f-'+x.id; d.innerHTML='<div class="lab"><label><i>*</i></label><span class="badge"></span></div><input class="ctl">';
-  var l=d.querySelector('label'); l.htmlFor='i-'+x.id; l.insertBefore(document.createTextNode(x.label+' '),l.firstChild); var i=d.querySelector('input'); i.id='i-'+x.id; i.placeholder=x.placeholder||''; return d; }
+  var l=d.querySelector('label'); l.htmlFor='i-'+x.id; l.insertBefore(document.createTextNode(x.label+' '),l.firstChild); var i=d.querySelector('input'); i.id='i-'+x.id; i.placeholder=x.placeholder||''; if(x.found){ i.value=x.value; d.classList.add('is-done'); d.querySelector('.badge').textContent='From documents'; } return d; }
 function finishAnalysis(){ var eg=$('#extraGrid'); EXTRA.forEach(function(x){ var f=$('#f-'+x.id); if(f) eg.appendChild(f); }); $('#extraBox').hidden=!EXTRA.length; closePop(); busy=false; }
+function parseFound(out){ var seen={}; return out?(out.found||[]).map(function(m){ return {id:'x_'+String(m.id||m.label||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,24),label:String(m.label||''),question:'',placeholder:'',value:String(m.value||''),found:true}; }).filter(function(x){ if(!x.label||!x.value||seen[x.id]) return false; seen[x.id]=1; return true; }).slice(0,4):[]; }
+function missingNow(){ return EXTRA.filter(function(x){ return !x.found&&!val(x.id); }); }
 function parseMissing(out){ var seen={}; return out?(out.missing||[]).map(function(m){ return {id:'x_'+String(m.id||m.label||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,24),label:String(m.label||''),question:String(m.question||''),placeholder:String(m.placeholder||'')}; }).filter(function(x){ if(!x.label||!x.question||seen[x.id]) return false; seen[x.id]=1; return true; }).slice(0,2):DEF_EXTRA.slice(); }
 async function liveAnalyse(t){ check(t); busy=true; setOrb('work'); refresh();
-  var req=agent({kind:'analyze',fields:allFields()},null).catch(function(){ return null; });
-  if(TALK){ await narrate(S.analyze,t); var res=await req; check(t); EXTRA=parseMissing(res); var eg=$('#extraGrid'); EXTRA.forEach(function(x){ if(!$('#f-'+x.id)) eg.appendChild(extraField(x)); });
-    $('#extraBox').hidden=!EXTRA.length; analysed=true; busy=false; setOrb('idle'); refresh(); return; }
+  var req=agent({kind:'analyze',fields:allFields(),docs:docData},null,35000).catch(function(){ return null; });
   var names=['Company profile','Agent identity and role','Goal, tone and language','Documents','Guidelines and restrictions'];
   openPop('<div class="popHead"><span class="spin" id="anSpin"></span><div><h3 id="anTitle">Analyzing your answers</h3><p id="anSub">Checking that the prompt has everything it needs.</p></div></div><ul class="rows" id="anList">'+names.map(row).join('')+row('Looking for anything missing')+'</ul><div class="grid2" id="anFields" hidden></div><div class="popFoot" id="anFoot" hidden><button class="btn pri" id="anGo">Continue</button></div>');
   await narrate(S.analyze,t);
   var list=$('#anList'), lis=list.children;
-  for(var i=0;i<5;i++){ setRow(lis[i],'run','Checking'); await wait(480,t); setRow(lis[i],'ok','OK',i===3?(docs.length?docs.length+' file read':'None added (optional)'):(i===4?(val('guide')?'':'None added (optional)'):'')); }
+  for(var i=0;i<5;i++){ setRow(lis[i],'run','Checking'); await wait(480,t); setRow(lis[i],'ok','OK',i===3?(docData.length?docData.length+' read':(docs.length?'File names only':'None added (optional)')):(i===4?(val('guide')?'':'None added (optional)'):'')); }
   setRow(lis[5],'run','Checking'); var out=await req; check(t);
-  EXTRA=parseMissing(out);
+  var missing=parseMissing(out), found=parseFound(out); docFacts=out&&out.facts?String(out.facts):''; EXTRA=missing.concat(found);
   list.removeChild(lis[5]);
-  if(!EXTRA.length){ $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(900,t); analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); return; }
-  var g=$('#anFields'); EXTRA.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'miss','Missing',''); g.appendChild(extraField(x)); });
-  $('#anTitle').textContent=EXTRA.length>1?'A couple of details are missing':'One detail is missing'; $('#anSub').textContent='I created '+(EXTRA.length>1?'these inputs':'this input')+' for you. Answer out loud or type.'; $('#anSpin').hidden=true; g.hidden=false; $('#anFoot').hidden=false;
+  found.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'ok','From documents',x.value); });
+  if(!missing.length){ var eg0=$('#extraGrid'); found.forEach(function(x){ eg0.appendChild(extraField(x)); }); $('#extraBox').hidden=!found.length; $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(900,t); analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); return; }
+  var g=$('#anFields'); missing.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'miss','Missing',''); g.appendChild(extraField(x)); }); found.forEach(function(x){ g.appendChild(extraField(x)); });
+  $('#anTitle').textContent=missing.length>1?'A couple of details are missing':'One detail is missing'; $('#anSub').textContent='I created '+(missing.length>1?'these inputs':'this input')+' for you. Answer out loud or type.'; $('#anSpin').hidden=true; g.hidden=false; $('#anFoot').hidden=false;
   $('#anGo').onclick=function(){ finishAnalysis(); if(botOn) start(SCRIPT.details); };
   analysed=true; busy=false; setOrb('idle'); refresh(); }
-async function runAnalysis(t){ await liveAnalyse(t); if(EXTRA.length) return {line:(EXTRA.length>1?'A couple of details are missing. ':'One detail is missing. ')+EXTRA[0].question,f:EXTRA[0].id}; if(popOpen()) finishAnalysis(); return detailsOpener()||{line:S.askGen[0],f:null}; }
+function afterDocsNote(){ var f=EXTRA.filter(function(x){ return x.found; }); return docData.length?'I read your documents'+(f.length?' and filled in '+f.map(function(x){ return x.label.toLowerCase(); }).join(', ').replace(/, ([^,]*)$/,' and $1')+' from them':'')+'. ':''; }
+async function runAnalysis(t){ await liveAnalyse(t); var mi=missingNow(); if(mi.length) return {line:afterDocsNote()+(mi.length>1?'A couple of details are still missing. ':'One detail is still missing. ')+mi[0].question,f:mi[0].id}; if(popOpen()) finishAnalysis(); var o=detailsOpener(); if(o&&!o.f) o.line=afterDocsNote()+o.line; return o||{line:S.askGen[0],f:null}; }
 
 async function doAction(a,t){
   if(stage==='intro'){ if(a==='build_with_ai'){ await press($('#introBot'),t); chooseBot(); return true; } if(a==='build_manually'){ await press($('#introManual'),t); chooseManual(); return true; } return false; }
@@ -792,7 +792,7 @@ async function converse(t,opener,focus){ var line=opener,f=focus;
 function basicsOpener(){ if(!val('name')) return {line:S.name[0],f:'name'}; if(!val('phone')){ showPhoneChips(); return {line:S.phone[0],f:'phone'}; } if(!mode) return {line:S.mode[0],f:'mode'};
   if(!val('voice')) return {line:'For '+cap(mode)+', I recommend '+VOICES[mode][0][0].split(' (')[0]+'. Should I pick that voice?',f:'voice'}; cueSource(); return {line:S.source[0],f:null}; }
 function detailsOpener(){ var order=['company','industry','agent','role','goal','language','tone'];
-  if(!analysed){ for(var i=0;i<order.length;i++) if(!val(order[i])) return {line:S[order[i]][0],f:order[i]}; if(!TALK&&!(docs.length||asked.docs)) return {line:S.docs[0],f:'docs'}; if(!(val('guide')||asked.guide)) return {line:S.guide[0],f:'guide'}; return null; }
+  if(!analysed){ for(var i=0;i<order.length;i++) if(!val(order[i])) return {line:S[order[i]][0],f:order[i]}; if(!(val('guide')||asked.guide)) return {line:S.guide[0],f:'guide'}; if(!(docs.length||asked.docs)) return {line:askDocs(),f:'docs'}; return null; }
   var miss=EXTRA.filter(function(x){ return !val(x.id); })[0]; if(miss) return {line:miss.question,f:miss.id};
   if(!(docs.length||asked.docs)) return {line:askDocs(),f:'docs'}; $('#genBtn').classList.add('cue'); return {line:S.askGen[0],f:null}; }
 /* the first thing only the person can do (upload documents): open the form, filled in, and point at the upload box */
@@ -801,8 +801,8 @@ function revealForm(){ if(!TALK) return; TALK=false; $('#card').classList.remove
   ['name','phone','mode','voice','company','industry','agent','role','goal','language','tone','guide'].concat(EXTRA.map(function(x){ return x.id; })).forEach(function(k){ if(has(k)) mark(k,'done',k==='guide'&&!val('guide')?'Skipped':'AI filled'); });
   var eg=$('#extraGrid'); EXTRA.forEach(function(x){ var f=$('#f-'+x.id); if(f&&f.parentNode!==eg) eg.appendChild(f); }); $('#extraBox').hidden=!EXTRA.length; }
 function progress(){ var el=$('#prog'); if(!TALK){ el.hidden=true; return; }
-  var ids=['name','phone','mode','voice'].concat(source==='upload'?[]:['company','industry','agent','role','goal','language','tone','guide']).concat(EXTRA.map(function(x){ return x.id; }));
-  var n=ids.filter(has).length; el.hidden=false; $('#progBar').style.width=Math.round(n/ids.length*100)+'%'; $('#progT').textContent=n+' of '+ids.length+' details collected'; }
+  var inBasics=stage!=='details', nb=['name','phone','mode','voice'].filter(has).length, nd=['company','industry','agent','role','goal','language','tone','guide'].filter(has).length;
+  progMax=Math.max(progMax,inBasics?nb/4*40:40+nd/8*60); el.hidden=false; $('#progBar').style.width=Math.round(progMax)+'%'; $('#progT').textContent=inBasics?'Basics':'About your business'; }
 var LIVE={
  intro:async function(t){ await wait(500,t); await converse(t,S.intro[0],null); },
  basics:async function(t){ await wait(650,t); var o=basicsOpener(); await converse(t,o.line,o.f); },
@@ -935,8 +935,8 @@ function glNext(){ var e=schema().filter(function(f){ return !f.value; })[0];
   return ''; }
 function glDocs(){ var line=askDocs(); return 'The form is now open with their answers filled in. Next field: docs, a file upload only the person can do. Say: '+line+' If they say no or skip, call update_form with docs = skip.'; }
 async function glAnalyse(){ var t=run; try{ glHush(); await liveAnalyse(t); check(t);
-    if(EXTRA.length){ var x=EXTRA[0]; mark(x.id,'active','Asking'); glApp('The check found missing details and created these fields: '+EXTRA.map(function(e){ return e.id+' ('+e.label+')'; }).join(', ')+'. Say: '+(EXTRA.length>1?'A couple of details are missing. ':'One detail is missing. ')+x.question); }
-    else { if(popOpen()) finishAnalysis(); glApp('Nothing is missing. '+glNext()); } }
+    var mi=missingNow(); if(mi.length){ var x=mi[0]; mark(x.id,'active','Asking'); glApp('The check found missing details and created these fields: '+mi.map(function(e){ return e.id+' ('+e.label+')'; }).join(', ')+'. Say: '+afterDocsNote()+(mi.length>1?'A couple of details are still missing. ':'One detail is still missing. ')+x.question); }
+    else { if(popOpen()) finishAnalysis(); glApp('Nothing is missing. Begin with: '+afterDocsNote()+' '+glNext()); } }
   catch(e){ if(!(e instanceof Cancel)) console.error(e); } }
 /* a stage opened by the person (or after processing): tell the bot what is on screen */
 function glStage(k){ return async function(t){ await wait(k==='intro'?300:500,t); if(glQuiet()) return; var o=null, note='';
@@ -1000,9 +1000,9 @@ function editAssistant(id){ var a=loadList().filter(function(x){ return x.id===i
   put('name',a.name); put('phone',a.phone); if(a.phone){ showPhoneChips(); }
   if(a.mode){ setMode(a.mode); asked.mode=true; mark('mode','done','Saved'); var vs=$('#i-voice'), vo=[].filter.call(vs.options,function(o){ return o.textContent.split(' (')[0]===a.voice; })[0]; if(vo){ vs.value=vo.value; asked.voice=true; mark('voice','done','Saved'); } }
   ['company','industry','agent','role','goal','language','tone','guide'].forEach(function(k){ put(k,a[k]); });
-  docs=(a.docs||[]).slice(); docs.forEach(function(d){ addFile('docFiles',d); }); if(a.docsSkipped) asked.docs=true;
+  docs=(a.docs||[]).slice(); docFacts=a.docFacts||''; docs.forEach(function(d){ addFile('docFiles',d); }); if(a.docsSkipped) asked.docs=true;
   if(a.guideSkipped) asked.guide=true;
-  EXTRA=(a.extra||[]).map(function(x){ return {id:x.id,label:x.label,question:x.question||'',placeholder:x.placeholder||''}; });
+  EXTRA=(a.extra||[]).map(function(x){ return {id:x.id,label:x.label,question:x.question||'',placeholder:x.placeholder||'',found:!!x.found,value:x.value}; });
   EXTRA.forEach(function(x,i){ $('#extraGrid').appendChild(extraField(x)); $('#i-'+x.id).value=(a.extra[i]||{}).value||''; mark(x.id,'done','Saved'); });
   $('#extraBox').hidden=!EXTRA.length; analysed=!!(a.extra||a.prompt);
   source=a.source||'gen'; upFile=a.upFile||''; if(upFile) addFile('upFiles',upFile);
@@ -1013,7 +1013,7 @@ function editAssistant(id){ var a=loadList().filter(function(x){ return x.id===i
 
 async function askGenerate(t){ var g=$('#genBtn'); g.scrollIntoView({block:'center',behavior:'smooth'}); g.classList.add('cue'); await say(S.askGen[0],t); if(!autoAns) return; await wait(1800,t); await hear(S.askGen[1],t); await press(g,t); runFlow('gen'); }
 
-function chooseBot(){ botOn=true; TALK=true; $('#card').classList.add('talking'); setStage('basics'); progress(); start(SCRIPT.basics); }
+function chooseBot(){ botOn=true; TALK=true; progMax=0; $('#card').classList.add('talking'); setStage('basics'); progress(); start(SCRIPT.basics); }
 function chooseManual(){ run++; stopSpeech(); botOn=false; openForm(); setStage('basics'); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
 function pickSource(k){ source=k; if(k==='upload') revealForm(); progress(); $('#srcGen').classList.remove('cue'); $('#srcUp').classList.remove('cue'); go(k==='gen'?'details':'upload'); }
 function tabGo(s){ if(stage==='intro') return; botOn=false; go(s); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
@@ -1026,14 +1026,27 @@ function addFile(listId,name){ var w=$('#'+listId),d=document.createElement('div
   setTimeout(function(){ d.querySelector('i').style.width='100%'; },60); setTimeout(function(){ var tg=d.querySelector('.tag'); tg.textContent='Uploaded'; tg.className='tag ok'; d.querySelector('.pb').remove(); },1100); }
 function attachPrompt(name){ upFile=name; $('#upFiles').innerHTML=''; addFile('upFiles',name); footer(); }
 var pickFor='';
-$('#docDrop').onclick=function(){ pickFor='doc'; $('#filePick').multiple=true; $('#filePick').click(); };
-$('#upDrop').onclick=function(){ pickFor='up'; $('#filePick').multiple=false; $('#filePick').click(); };
-$('#filePick').onchange=function(e){ var fs=[].slice.call(e.target.files); if(!fs.length) return;
-  if(pickFor==='doc'){ fs.forEach(function(f){ addFile('docFiles',f.name); docs.push(f.name); }); }
+$('#docDrop').onclick=function(){ pickFor='doc'; $('#filePick').multiple=true; $('#filePick').accept='.pdf,.txt,.md,.csv,.docx,.png,.jpg,.jpeg,.webp'; $('#filePick').click(); };
+$('#upDrop').onclick=function(){ pickFor='up'; $('#filePick').multiple=false; $('#filePick').accept=''; $('#filePick').click(); };
+/* Documents are read here so the analysis can use them: PDFs and images go to Gemini as files (base64),
+   text and Word files are turned into text first. About 3 MB in total fits the Vercel request limit. */
+function loadScript(src){ return new Promise(function(res,rej){ var s=document.createElement('script'); s.src=src; s.onload=res; s.onerror=rej; document.head.appendChild(s); }); }
+function readAs(file,how){ return new Promise(function(res,rej){ var r=new FileReader(); r.onload=function(){ res(r.result); }; r.onerror=rej; r[how](file); }); }
+async function readDoc(f){ var n=f.name.toLowerCase();
+  if(/\.(txt|md|csv|json|html?)$/.test(n)) return {name:f.name,text:String(await readAs(f,'readAsText')).slice(0,40000)};
+  if(/\.docx$/.test(n)){ if(!window.mammoth) await loadScript('https://cdn.jsdelivr.net/npm/mammoth@1/mammoth.browser.min.js'); var r=await window.mammoth.extractRawText({arrayBuffer:await readAs(f,'readAsArrayBuffer')}); return {name:f.name,text:String(r.value||'').slice(0,40000)}; }
+  var mime=/\.pdf$/.test(n)?'application/pdf':(/\.png$/.test(n)?'image/png':(/\.jpe?g$/.test(n)?'image/jpeg':(/\.webp$/.test(n)?'image/webp':'')));
+  if(!mime) return null; var url=String(await readAs(f,'readAsDataURL')); return {name:f.name,mime:mime,data:url.slice(url.indexOf(',')+1)}; }
+async function readDocs(fs){ var used=docData.reduce(function(n,d){ return n+(d.data||d.text||'').length; },0), skipped=[];
+  for(var i=0;i<fs.length;i++){ var d=null; try{ d=await readDoc(fs[i]); }catch(e){}
+    var size=d?(d.data||d.text||'').length:0;
+    if(!d||!size||docData.length>=3||used+size>4.2e6){ skipped.push(fs[i].name); continue; } used+=size; docData.push(d); }
+  if(skipped.length) toast('Could not read '+skipped.join(', ')+' (type or size). Only the file name is used. PDF, Word, text or images up to about 3 MB work.'); }
+$('#filePick').onchange=async function(e){ var fs=[].slice.call(e.target.files); e.target.value=''; if(!fs.length) return;
+  if(pickFor==='doc'){ fs.forEach(function(f){ addFile('docFiles',f.name); docs.push(f.name); }); mark('docs','active','Reading'); await readDocs(fs); mark('docs','done','Uploaded'); asked.docs=true; }
   else { attachPrompt(fs[0].name); if(botOn) start(SCRIPT.upload); }
   if(pickFor==='doc'&&GL.on&&botOn){ asked.docs=true; mark('docs','done','Uploaded'); glApp('The person uploaded '+fs.map(function(f){ return f.name; }).join(', ')+'. The docs field is done. '+glNext()); }
-  if(pickFor==='doc'&&waitRes) waitRes('[I uploaded the file '+fs.map(function(f){ return f.name; }).join(', ')+']');
-  e.target.value=''; };
+  if(pickFor==='doc'&&waitRes) waitRes('[I uploaded the file '+fs.map(function(f){ return f.name; }).join(', ')+']'); };
 
 /* ---------- popups ---------- */
 function openPop(html){ $('#popCard').innerHTML=html; $('#pop').classList.add('on'); }
@@ -1042,9 +1055,6 @@ function row(title){ return '<li><span class="ic"></span><span class="t"><b>'+ti
 function setRow(li,cls,em,small){ li.className=cls; li.querySelector('em').textContent=em; if(small!=null) li.querySelector('small').textContent=small; }
 
 async function analyse(t){ check(t); EXTRA=DEF_EXTRA.slice(); busy=true; setOrb('work'); refresh();
-  if(TALK){ await narrate(S.analyze,t); var eg=$('#extraGrid'); EXTRA.forEach(function(x){ if(!$('#f-'+x.id)){ var d=extraField(x); eg.appendChild(d); } }); $('#extraBox').hidden=false; busy=false; progress();
-    if(botOn){ await say(S.missingTalk,t); await ask('hours',S.hours,function(t){ return typeText('hours',S.hours[2],t); },t); await ask('handoff',S.handoff,function(t){ return typeText('handoff',S.handoff[2],t); },t); }
-    analysed=true; setOrb('idle'); refresh(); return; }
   var names=['Company profile','Agent identity and role','Goal, tone and language','Documents','Guidelines and restrictions','Working hours','Human handoff'];
   openPop('<div class="popHead"><span class="spin" id="anSpin"></span><div><h3 id="anTitle">Analyzing your answers</h3><p id="anSub">Checking that the prompt has everything it needs.</p></div></div><ul class="rows" id="anList">'+names.map(row).join('')+'</ul><div class="grid2" id="anFields" hidden></div><div class="popFoot" id="anFoot" hidden><button class="btn pri" id="anGo">Continue</button></div>');
   await narrate(S.analyze,t);
@@ -1082,7 +1092,7 @@ async function pipeline(kind,t){ check(t); busy=true; setOrb('work'); refresh();
 
 function runFlow(kind){ source=kind; $('#genBtn').classList.remove('cue');
   if(kind==='gen'&&!analysed&&live&&botOn){ start(SCRIPT.details); return; }
-  start(async function(t){ if(kind==='gen'&&!analysed) await analyse(t); if(popOpen()) finishAnalysis();
+  start(async function(t){ if(kind==='gen'&&!analysed){ if(!live){ await analyse(t); } else { await liveAnalyse(t); if(popOpen()&&missingNow().length) return; /* the person fills the new inputs, presses Continue, then Generate again */ } } if(popOpen()) finishAnalysis();
     var pr=(live&&kind==='gen')?agent({kind:'prompt',fields:allFields()},null,40000).catch(function(){ return null; }):null;
     await pipeline(kind,t); var out=pr?await pr:null; check(t);
     if(live&&kind==='gen'&&!out) toast('The AI prompt writer did not answer, so this prompt uses the built-in template.');
@@ -1110,7 +1120,7 @@ $('#dlBtn').onclick=function(){ var a=document.createElement('a'); a.href=URL.cr
 function save(){ run++; stopSpeech();
   var item={id:editId||Date.now(),name:val('name')||'Untitled assistant',phone:val('phone'),mode:mode,voice:($('#i-voice').value||'').split(' (')[0],
     company:val('company'),industry:val('industry'),agent:val('agent'),role:val('role'),goal:val('goal'),language:val('language'),tone:val('tone'),guide:val('guide'),guideSkipped:!!asked.guide&&!val('guide'),
-    docs:docs.slice(),docsSkipped:!!asked.docs&&!docs.length,extra:EXTRA.map(function(x){ return {id:x.id,label:x.label,question:x.question,placeholder:x.placeholder,value:val(x.id)}; }),
+    docs:docs.slice(),docFacts:docFacts,docsSkipped:!!asked.docs&&!docs.length,extra:EXTRA.map(function(x){ return {id:x.id,label:x.label,question:x.question,placeholder:x.placeholder,found:!!x.found,value:val(x.id)}; }),
     source:source,upFile:upFile,prompt:$('#prompt').value,persona:$('#i-persona').value,
     analytics:[].map.call($('#anRows').children,function(r){ var c=r.querySelectorAll('.ctl'); return [c[0].value,c[2].value,c[1].value]; }),
     fields:$('#anRows').children.length,created:new Date().toISOString()};
@@ -1123,7 +1133,7 @@ function save(){ run++; stopSpeech();
 function clearStage(){ var ids=stage==='basics'?['name','phone','voice']:(stage==='details'?['company','industry','agent','role','goal','language','tone','guide','hours','handoff']:[]);
   ids.forEach(function(id){ var e=$('#i-'+id); if(e) e.value=''; asked[id]=false; mark(id,null); });
   if(stage==='basics'){ setMode(''); asked.mode=false; mark('mode',null); $('#phoneSug').hidden=true; }
-  if(stage==='details'){ docs=[]; asked.docs=false; mark('docs',null); $('#docFiles').innerHTML=''; analysed=false; $('#extraBox').hidden=true; $('#extraGrid').innerHTML=''; EXTRA=[]; }
+  if(stage==='details'){ docs=[]; docData=[]; docFacts=''; asked.docs=false; mark('docs',null); $('#docFiles').innerHTML=''; analysed=false; $('#extraBox').hidden=true; $('#extraGrid').innerHTML=''; EXTRA=[]; }
   if(stage==='upload'){ upFile=''; $('#upFiles').innerHTML=''; mark('up',null); footer(); } }
 $('#playBtn').onclick=function(){
   if(botOn){ botOn=false; stopSpeech(); revealForm(); if(stage==='intro'){ run++; openForm(); setStage('basics'); setQ(S.manual); setYou(''); } if(!busy) setOrb('idle'); refresh(); return; }

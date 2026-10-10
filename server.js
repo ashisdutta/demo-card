@@ -20,7 +20,8 @@ http.createServer((req, res) => {
   const url = req.url.split('?')[0];
   if (req.method === 'POST' && url === '/api/agent') {
     let raw = '';
-    req.on('data', (c) => { raw += c; if (raw.length > 60000) req.destroy(); });
+    // up to 6 MB: documents for the analysis (Vercel itself allows 4.5 MB)
+    req.on('data', (c) => { raw += c; if (raw.length > 6e6) req.destroy(); });
     req.on('end', async () => {
       let body = null;
       try { body = JSON.parse(raw || '{}'); } catch (e) { /* bad JSON */ }

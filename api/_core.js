@@ -42,10 +42,12 @@ const TURN_SYSTEM = [
 ].join('\n');
 
 const ANALYZE_SYSTEM = [
-  'You review the answers collected for the system prompt of a phone voice agent.',
-  'You receive JSON with fields (label and value). Find the important details that are still missing: things callers of this kind of business will very likely need and that the fields do not already cover, for example working hours, how to hand off to a human, how bookings are made, or the service area.',
-  'Reply with one JSON object and nothing else: {"missing":[{"id","label","question","placeholder"}]}.',
-  'Return one or two items. id is snake_case. label is two to four words. question is one short spoken question with no markdown. placeholder is a short example answer.'
+  'You review the answers collected for the system prompt of a phone voice agent, together with any company documents attached after the JSON (price lists, FAQs, service details).',
+  'You receive JSON with fields (label and value). Decide which important details callers of this kind of business will very likely need, for example working hours, how to hand off to a human, how bookings are made, prices, or the service area.',
+  'Reply with one JSON object and nothing else: {"missing":[{"id","label","question","placeholder"}],"found":[{"id","label","value"}],"facts":""}.',
+  '"missing": one or two of those details that neither the answers nor the documents cover. If the documents answer something, it is not missing. id is snake_case, label is two to four words, question is one short spoken question with no markdown, placeholder is a short example answer.',
+  '"found": up to four of those details that the answers do not cover but the documents do, with a short value taken faithfully from the documents. Never invent a value. Empty when there are no documents.',
+  '"facts": the key facts from the documents that the voice agent will need on calls (services, prices, policies, hours, contacts), as short plain sentences, at most 150 words. Empty string when there are no documents.'
 ].join('\n');
 
 const PROMPT_SYSTEM = [
@@ -58,6 +60,19 @@ const PROMPT_SYSTEM = [
 ].join('\n');
 
 const clip = (v, n) => String(v == null ? '' : v).slice(0, n);
+
+// Company documents sent with the analysis: PDFs and images go to Gemini as files, text arrives already extracted
+// by the browser (txt, md, csv, docx). At most 3 files and about 3 MB, to stay under the Vercel request limit.
+const DOC_TYPES = ['application/pdf', 'image/png', 'image/jpeg', 'image/webp'];
+function docParts(list) {
+  const out = []; let budget = 4.2e6;
+  arr(list).slice(0, 3).forEach((d) => {
+    const name = clip(d && d.name, 120) || 'document';
+    if (d && typeof d.text === 'string' && d.text.trim()) { out.push({ text: 'Document: ' + name }, { text: clip(d.text, 40000) }); return; }
+    if (d && typeof d.data === 'string' && DOC_TYPES.includes(d.mime) && d.data.length <= budget) { budget -= d.data.length; out.push({ text: 'Document: ' + name }, { inlineData: { mimeType: d.mime, data: d.data } }); }
+  });
+  return out;
+}
 const arr = (v) => (Array.isArray(v) ? v : []);
 
 function cleanFields(list) {
@@ -84,7 +99,7 @@ const retryable = (e) => [404, 429, 500, 503, 504].includes(e.status) || /not fo
 
 // One request to one model. fast turns off "thinking" where the model allows it (gemini-3.5 models; 3.8 rejects it):
 // with thinking, gemini-3.5-flash spends about 300 tokens and a second or two on a simple form turn.
-async function callModel(model, system, payload, maxTokens, temperature, ms, fast, ctl) {
+async function callModel(model, system, payload, maxTokens, temperature, ms, fast, ctl, extra) {
   const timer = setTimeout(() => ctl.abort(), ms);
   const gen = { responseMimeType: 'application/json', temperature: temperature, maxOutputTokens: maxTokens };
   if (fast && /^gemini-3\.5/.test(model)) gen.thinkingConfig = { thinkingLevel: 'minimal' };
@@ -94,7 +109,7 @@ async function callModel(model, system, payload, maxTokens, temperature, ms, fas
       headers: { 'content-type': 'application/json', 'x-goog-api-key': process.env.GEMINI_API_KEY },
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: system }] },
-        contents: [{ role: 'user', parts: [{ text: JSON.stringify(payload) }] }],
+        contents: [{ role: 'user', parts: [{ text: JSON.stringify(payload) }].concat(extra || []) }],
         generationConfig: gen
       })
     });
@@ -129,7 +144,7 @@ function callGemini(system, payload, maxTokens, temperature, ms, opts) {
       const model = models[next++]; const ctl = new AbortController(); ctls.push(ctl); running++;
       clearTimeout(hedgeTimer);
       if (opts.hedge && next < models.length) hedgeTimer = setTimeout(launch, opts.hedge);
-      callModel(model, system, payload, maxTokens, temperature, ms || 10000, opts.fast, ctl).then((v) => finish(null, v), (e) => {
+      callModel(model, system, payload, maxTokens, temperature, ms || 10000, opts.fast, ctl, opts.parts).then((v) => finish(null, v), (e) => {
         running--; if (done) return; lastErr = e;
         if (!retryable(e)) return finish(e);
         console.warn('[gemini] ' + model + ': ' + e.message.slice(0, 120) + ', trying the next model');
@@ -301,9 +316,11 @@ async function handle(body) {
     if (process.env.MOCK_AGENT) return { status: 200, json: mock(kind, Object.assign({}, b, { fields: fields })) };
 
     if (kind === 'analyze') {
-      const r = await callGemini(ANALYZE_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })) }, 1024, 0.3, 10000, { fast: true, hedge: 4000 });
+      const parts = docParts(b.docs);
+      const r = await callGemini(ANALYZE_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })), documents_attached: parts.length / 2 }, 2048, 0.3, parts.length ? 25000 : 10000, { fast: true, hedge: parts.length ? 12000 : 4000, parts: parts });
       const missing = arr(r.missing).slice(0, 2).map((m) => ({ id: clip(m.id, 30), label: clip(m.label, 40), question: clip(m.question, 160), placeholder: clip(m.placeholder, 80) })).filter((m) => m.label && m.question);
-      return { status: 200, json: { missing: missing } };
+      const found = parts.length ? arr(r.found).slice(0, 4).map((m) => ({ id: clip(m.id, 30), label: clip(m.label, 40), value: clip(m.value, 300) })).filter((m) => m.label && m.value) : [];
+      return { status: 200, json: { missing: missing, found: found, facts: parts.length ? clip(r.facts, 1500) : '' } };
     }
     if (kind === 'prompt') {
       const r = await callGemini(PROMPT_SYSTEM, { fields: fields.map((f) => ({ label: f.label, value: f.value })) }, 4096, 0.5, 18000, { hedge: 12000 });
