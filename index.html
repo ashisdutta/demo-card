@@ -438,13 +438,8 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 <div id="demo" class="hide">
   <span>Demo</span>
   <button id="dRestart">Restart</button>
-  <button id="dLive" class="on">Mode: live AI</button>
-  <button id="dVoice">Bot voice: browser</button>
-  <select id="dVoiceSel" aria-label="Browser voice"></select>
   <em id="dAi">AI: checking…</em>
-  <button id="dAuto" class="on">Auto-answer: on</button>
-  <button id="dUser">Speak answers: off</button>
-  <button id="dBarge" class="on">Interruptions: on</button>
+  <button id="dBarge">Interruptions: off</button>
 </div>
 <div id="toast" role="status"></div>
 <input type="file" id="filePick" hidden multiple>
@@ -500,7 +495,7 @@ var PIPE={
 var SIM=[['Caller','Hi, do you take Delta Dental?'],['Agent','Yes, we accept Delta Dental. Would you like to book a visit?'],['Caller','How much is a cleaning?'],['Agent','An exam and cleaning is ninety-five dollars. Shall I find you a time?'],['Caller','I have a bad toothache right now.'],['Agent','I am sorry to hear that. Let me connect you to our front desk straight away.']];
 
 /* ---------- state ---------- */
-var run=0, botOn=false, busy=false, stage='intro', sound=!params.has('mute'), autoAns=true, speakAns=false, live=!params.has('scripted'), gemVoice=params.has('geminivoice'), gemAudio=null, ttsCache={}, aiDown=false, aiDownAt=0;
+var run=0, botOn=false, busy=false, stage='intro', sound=!params.has('mute'), live=true, aiDown=false, aiDownAt=0;
 var DEF_EXTRA=[{id:'hours',label:'Working hours',question:'What are your working hours?',placeholder:'e.g. Mon to Fri, 9 am to 6 pm'},{id:'handoff',label:'Human handoff',question:'Where should I transfer a caller who needs a human?',placeholder:'Who should take over a call'}], EXTRA=[];
 var TALK=false; /* build-with-me: the bot collects answers by voice while the form stays hidden */
 var docData=[], docFacts='', progMax=0; /* uploaded document contents for the analysis, and the key facts it returns */
@@ -510,50 +505,11 @@ var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 function check(t){ if(t!==run) throw new Cancel(); }
 function need(t){ check(t); if(!botOn) throw new Cancel(); }
 async function wait(ms,t){ var e=0; while(e<ms){ await sleep(40); check(t); e+=40; } }
-function start(fn){ var t=++run; stopSpeech(); Promise.resolve().then(function(){return fn(t);}).catch(function(e){ if(!(e instanceof Cancel)) console.error(e); }).then(function(){ if(t===run){ setOrb('idle'); refresh(); } }); return t; }
+function start(fn){ var t=++run; Promise.resolve().then(function(){return fn(t);}).catch(function(e){ if(!(e instanceof Cancel)) console.error(e); }).then(function(){ if(t===run){ setOrb('idle'); refresh(); } }); return t; }
 
 /* ---------- speech ---------- */
-var botVoice=null,userVoice=null,synth=window.speechSynthesis;
-function pickVoices(){ if(!synth) return; var all=synth.getVoices(); if(!all.length) return;
-  var en=all.filter(function(v){return /^en/i.test(v.lang);});
-  var indian=all.filter(function(v){return /en[-_]IN/i.test(v.lang)||/\b(India|Neerja|Veena|Tara|Aman|Heera|Aditi|Raveena|Kajal|Swara|Isha|Rishi|Ravi|Prabhat)\b/i.test(v.name)&&/^en/i.test(v.lang);});
-  var hindi=all.filter(function(v){return /hi[-_]IN/i.test(v.lang);});
-  function best(list){ var fem=/\b(Neerja|Veena|Tara|Heera|Aditi|Raveena|Kajal|Swara|Isha|Female)\b/i, nat=/Natural|Online|Google|Premium|Enhanced/i;
-    return list.slice().sort(function(x,y){ return (fem.test(y.name)*2+nat.test(y.name))-(fem.test(x.name)*2+nat.test(x.name)); })[0]||null; }
-  var saved=null; try{ saved=localStorage.getItem('va_voice'); }catch(e){}
-  /* default bot voice: Google Hindi in Chrome (reads English with an Indian accent); other browsers fall back to the best Indian voice */
-  var googleHindi=hindi.filter(function(v){ return /^Google/i.test(v.name); })[0];
-  botVoice=all.filter(function(v){ return v.name===saved; })[0]||googleHindi||best(indian)||best(hindi)||best(en)||all[0];
-  var sel=$('#dVoiceSel'); if(sel){ sel.innerHTML=''; (googleHindi?[googleHindi]:[]).concat(indian,hindi.filter(function(v){ return v!==googleHindi; }),en.filter(function(v){ return indian.indexOf(v)<0; })).forEach(function(v){ var o=document.createElement('option'); o.value=v.name; o.textContent=(indian.indexOf(v)>=0||hindi.indexOf(v)>=0?'🇮🇳 ':'')+v.name+' ('+v.lang+')'; sel.appendChild(o); }); sel.value=botVoice.name; }
-  userVoice=indian.filter(function(v){return v!==botVoice;})[0]||en.filter(function(v){return v!==botVoice;})[0]||botVoice; }
-if(synth){ pickVoices(); synth.onvoiceschanged=pickVoices; }
-function stopSpeech(){ try{ if(synth) synth.cancel(); }catch(e){} if(gemAudio){ try{ gemAudio.pause(); }catch(e){} gemAudio=null; } }
-function gemOff(){ if(gemVoice){ gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); toast('Gemini voice is unavailable. Using the browser voice.'); } }
-function gemSpeak(text,t){ return new Promise(function(res){ var done=false,a=null; function fin(v){ if(done) return; done=true; clearInterval(iv); res(v); }
-  var iv=setInterval(function(){ if(t!==run||!botOn){ if(a){ try{ a.pause(); }catch(e){} } fin(false); } },60);
-  var p=ttsCache[text]||(ttsCache[text]=agent({kind:'tts',text:text},null,13000));
-  p.then(function(j){ if(done) return; if(!j||!j.audio) throw new Error('no audio'); a=gemAudio=new Audio('data:'+(j.mime||'audio/wav')+';base64,'+j.audio); a.onended=function(){ fin(true); }; a.onerror=function(){ gemOff(); fin('fail'); }; return a.play(); })
-   .catch(function(){ delete ttsCache[text]; if(!done){ gemOff(); fin('fail'); } }); }); }
-function speak(text,t,asUser){ if(sound&&gemVoice&&!asUser) return gemSpeak(text,t).then(function(v){ return v==='fail'?speak(text,t,asUser):v; });
- return new Promise(function(res){
-  var est=500+text.length*(asUser?58:62), done=false, to=null, started=false;
-  function fin(v){ if(done) return; done=true; clearInterval(iv); clearTimeout(to); clearTimeout(wd); res(v); }
-  var iv=setInterval(function(){ if(t!==run||!botOn){ stopSpeech(); fin(false); } },60), wd=null;
-  if(sound&&synth&&(!asUser||speakAns)){
-    try{ var u=new SpeechSynthesisUtterance(text); u.voice=asUser?userVoice:botVoice; u.lang=(u.voice&&u.voice.lang)||'en-IN'; u.rate=1.03; u.pitch=asUser?0.9:1.05;
-      u.onstart=function(){ started=true; }; u.onend=function(){ fin(true); }; u.onerror=function(){ if(!done&&!to) to=setTimeout(function(){fin(true);},est); };
-      synth.speak(u);
-      wd=setTimeout(function(){ if(!started&&!done){ stopSpeech(); to=setTimeout(function(){fin(true);},est); } },1500);
-      setTimeout(function(){ fin(true); },est*2.2+4000);
-    }catch(e){ to=setTimeout(function(){fin(true);},est); }
-  } else { to=setTimeout(function(){fin(true);},est); }
-});}
-async function say(text,t){ need(t); if(live){ if(GL.on){ if(!glQuiet()) glApp('Say: '+text); } else setQ(text); return; } setQ(text); fadeYou(); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
+async function say(text,t){ need(t); if(GL.on){ if(!glQuiet()) glApp('Say: '+text); } else setQ(text); } /* the bot only speaks through Gemini Live */
 async function narrate(text,t){ if(!botOn) return; try{ await say(text,t); }catch(e){ check(t); } setOrb('work'); }
-async function hear(text,t){ need(t); setOrb('listen'); refresh(); var sp=speakAns?speak(text,t,true):null; var el=$('#you'); el.classList.remove('ph');
-  for(var i=1;i<=text.length;i++){ el.textContent=text.slice(0,i); await sleep(24); need(t); }
-  if(sp){ await sp; need(t); } await wait(320,t); }
-
 /* ---------- small UI helpers ---------- */
 function setQ(s){ $('#q').textContent=s; }
 var youT=null;
@@ -576,10 +532,7 @@ function mark(id,state,text){ var f=$('#f-'+id); if(!f) return; f.classList.remo
 function val(id){ var e=$('#i-'+id); return e?e.value.trim():''; }
 function has(id){ if(asked[id]) return true; if(id==='mode') return !!mode; if(id==='docs') return docs.length>0; return val(id)!==''; }
 async function typeText(id,text,t){ var e=$('#i-'+id); if(TALK){ e.value=text; return; } partial[id]=true; var step=text.length>80?3:1; for(var i=step;i<text.length+step;i+=step){ e.value=text.slice(0,i); if(e.tagName==='TEXTAREA') e.scrollTop=e.scrollHeight; await sleep(20); need(t); } e.value=text; partial[id]=false; }
-async function ask(id,line,setter,t){ if(has(id)) return; mark(id,'active','Asking');
-  try{ await say(line[0],t); mark(id,'active','Listening'); await hear(line[1],t); mark(id,'active','Writing'); await setter(t); asked[id]=true; mark(id,'done','AI filled'); await wait(380,t); }
-  catch(e){ if(partial[id]){ var el=$('#i-'+id); if(el) el.value=''; partial[id]=false; } if(!asked[id]) mark(id,null); throw e; } }
-async function press(el,t){ need(t); el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('pressing'); await wait(650,t); el.classList.remove('pressing'); }
+async function press(el,t){ need(t); el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('pressing'); await wait(TALK?0:300,t); el.classList.remove('pressing'); }
 function fit(){ var s=Math.min(1,(innerWidth-32)/1200,(innerHeight-76)/800); $('#fit').style.transform='scale('+s+')'; }
 addEventListener('resize',fit); fit();
 
@@ -611,43 +564,15 @@ function footer(){ var m=$('#footMsg'),a=$('#footActs'); a.innerHTML=''; m.class
 var dirty=false;
 function markDirty(){ if(editId&&!dirty){ dirty=true; footer(); } }
 function cancelEdit(){ if(dirty&&!confirm('Discard your unsaved changes?')) return; closeAll(); }
-function go(s){ run++; stopSpeech(); busy=false; closePop(); setStage(s); if(botOn) start(SCRIPT[s]); }
+function go(s){ run++; busy=false; closePop(); setStage(s); if(botOn) start(SCRIPT[s]); }
 function openForm(){ $('#card').classList.add('open'); }
 
-var SIMS={
- intro:async function(t){ await wait(500,t); await say(S.intro[0],t); if(!autoAns) return; await wait(2400,t); await hear(S.intro[1],t); await press($('#introBot'),t); chooseBot(); },
- basics:async function(t){ await wait(650,t);
-   await ask('name',S.name,function(t){ return typeText('name',S.name[2],t); },t);
-   if(!has('phone')){ showPhoneChips(); }
-   await ask('phone',S.phone,async function(t){ $('#i-phone').value=PHONES[0][0]; syncChips(); await wait(300,t); },t);
-   await ask('mode',S.mode,async function(t){ setMode('standard'); await wait(300,t); },t);
-   await ask('voice',S.voice,async function(t){ $('#i-voice').selectedIndex=1; await wait(300,t); },t);
-   $('#f-source').scrollIntoView({block:'center',behavior:'smooth'}); $('#srcGen').classList.add('cue'); $('#srcUp').classList.add('cue');
-   await say(S.source[0],t); if(!autoAns) return; await wait(2200,t); await hear(S.source[1],t); await press($('#srcGen'),t); pickSource('gen'); },
- details:async function(t){ await wait(500,t);
-   if(analysed&&has('guide')){ await askGenerate(t); return; }
-   await ask('company',S.company,function(t){ return typeText('company',S.company[2],t); },t);
-   await ask('industry',S.industry,async function(t){ $('#i-industry').value=S.industry[2]; await wait(300,t); },t);
-   await ask('agent',S.agent,function(t){ return typeText('agent',S.agent[2],t); },t);
-   await ask('role',S.role,function(t){ return typeText('role',S.role[2],t); },t);
-   await ask('goal',S.goal,function(t){ return typeText('goal',S.goal[2],t); },t);
-   await ask('language',S.language,async function(t){ $('#i-language').value=S.language[2]; await wait(300,t); },t);
-   await ask('tone',S.tone,async function(t){ $('#i-tone').value=S.tone[2]; await wait(300,t); },t);
-   await ask('guide',S.guide,function(t){ return typeText('guide',S.guide[2],t); },t);
-   if(!has('docs')){ var dl=askDocs(); await wait(800,t); await ask('docs',[dl,S.docs[1]],async function(t){ addFile('docFiles',S.docs[2]); docs.push(S.docs[2]); await wait(1300,t); },t); }
-   await analyse(t); await askGenerate(t); },
- upload:async function(t){ await wait(500,t);
-   if(!upFile){ mark('up','active','Waiting'); await say(S.upAsk,t); if(!autoAns) return; await wait(2400,t); attachPrompt('apex_dental_system_prompt.md'); await wait(1300,t); }
-   mark('up','done','Attached'); await say(S.upGot[0],t); $('#upGo').classList.add('cue'); if(!autoAns) return; await wait(1800,t); await hear(S.upGot[1],t); await press($('#upGo'),t); runFlow('upload'); },
- result:async function(t){ if(!promptText) return; await wait(400,t); await say(S.result[0],t); $('#saveBtn').classList.add('cue'); if(!autoAns) return; await wait(2600,t); await hear(S.result[1],t); await press($('#saveBtn'),t); save(); }
-};
 /* ================= LIVE AI MODE ================= */
 function LiveFail(m){ this.message=m; } LiveFail.prototype=Object.create(Error.prototype);
 function esc(s){ return String(s).replace(/[&<>"]/g,function(c){ return {'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]; }); }
 function cap(s){ return s?s.charAt(0).toUpperCase()+s.slice(1):s; }
 var toastT=null;
 function toast(m){ var e=$('#toast'); e.textContent=m; e.classList.add('on'); clearTimeout(toastT); toastT=setTimeout(function(){ e.classList.remove('on'); },6000); }
-function setLive(v){ live=v; if(!v) glClose(); var b=$('#dLive'); b.textContent='Mode: '+(v?'live AI':'scripted'); b.classList.toggle('on',v); $('#dAuto').hidden=v; $('#dUser').hidden=v; }
 function aiStatus(ok,why){ var e=$('#dAi'); if(ok&&GL.on){ aiLiveLabel(); return; } e.textContent=ok?'AI: live':'AI: offline'; e.className=ok?'ok':'bad'; e.title=why||''; }
 async function rawAgent(payload,ms){ var ctl=new AbortController(), to=setTimeout(function(){ ctl.abort(); },ms||22000), r, j;
   try{ r=await fetch('/api/agent',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload),signal:ctl.signal}); j=await r.json(); }
@@ -747,7 +672,7 @@ function revealForm(){ if(!TALK) return; TALK=false; $('#card').classList.remove
 function progress(){ var el=$('#prog'); if(!TALK){ el.hidden=true; return; }
   var inBasics=stage!=='details', nb=['name','phone','mode','voice'].filter(has).length, nd=['company','industry','agent','role','goal','language','tone','guide'].filter(has).length;
   progMax=Math.max(progMax,inBasics?nb/4*40:40+nd/8*60); el.hidden=false; $('#progBar').style.width=Math.round(progMax)+'%'; $('#progT').textContent=inBasics?'Basics':'About your business'; }
-var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return live?glRun(k):SIMS[k]; }}); });
+var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return glRun(k); }}); });
 /* ================= GEMINI LIVE: one WebSocket for the whole build =================
    Opened when Create Assistant is clicked, closed once the assistant is saved (or the builder is closed).
    Gemini hears the mic and speaks itself; it changes the form only through tool calls, checked here.
@@ -768,7 +693,7 @@ function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); glArm(); }
 function glHush(){ GL.quiet=true; clearTimeout(GL.quietT); GL.quietT=setTimeout(function(){ GL.quiet=false; },4000); }
 function glQuiet(){ if(!GL.quiet) return false; GL.quiet=false; clearTimeout(GL.quietT); return true; }
 /* audio contexts are created inside the Create Assistant click, so the browser lets them play */
-function glPrime(){ try{ if(!GL.outCtx) GL.outCtx=new AudioContext({sampleRate:24000}); if(!GL.inCtx) GL.inCtx=new AudioContext(); GL.outCtx.resume(); GL.inCtx.resume(); glLoopback(); }catch(e){} }
+function glPrime(){ try{ if(!GL.outCtx) GL.outCtx=new AudioContext({sampleRate:24000}); if(!GL.inCtx) GL.inCtx=new AudioContext(); GL.outCtx.resume(); GL.inCtx.resume(); if(BARGE.on) glLoopback(); }catch(e){} }
 /* Chrome removes echo reliably only for audio it plays from a WebRTC call, so the bot's voice is sent through a
    WebRTC connection from the page to itself and played from an <audio> element. Until that is up, it plays directly. */
 function glLoopback(){ var ctx=GL.outCtx; if(GL.mix||!ctx) return; GL.mix=ctx.createGain(); GL.mix.connect(ctx.destination);
@@ -797,7 +722,7 @@ function glMicStart(){ if(!micStream||!GL.inCtx||GL.node) return; var ctx=GL.inC
 /* While the bot talks, the mic is held back until someone speaks clearly over it: 0.3 s of sound well above the
    leftover echo level (learned while the bot talks). Then the last 0.5 s and everything after go to Gemini, which stops
    the bot. Short sounds, "hmm" and remaining echo do not cut it off. */
-var BARGE={on:!params.has('nointerrupt'),echo:0.004,run:0,pre:[]};
+var BARGE={on:params.has('interrupt'),echo:0.004,run:0,pre:[]};
 function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk) return;
   if(glSpeaking()&&!GL.barge){ if(!BARGE.on) return;
     var r=0; for(var i=0;i<f.length;i++) r+=f[i]*f[i]; r=Math.sqrt(r/f.length);
@@ -813,7 +738,7 @@ function glPcm(f){
 function glPlay(b64){ var ctx=GL.outCtx; if(!ctx||!sound) return; var bin=atob(b64), n=bin.length>>1, f=new Float32Array(n);
   for(var i=0;i<n;i++){ var v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8); if(v>=32768) v-=65536; f[i]=v/32768; }
   var buf=ctx.createBuffer(1,n,24000); buf.copyToChannel(f,0); var s=ctx.createBufferSource(); s.buffer=buf; s.connect(GL.mix||ctx.destination);
-  var at=Math.max(ctx.currentTime+0.04,GL.until); GL.lastStart=at; s.start(at); GL.until=at+buf.duration; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
+  var at=Math.max(ctx.currentTime+0.04,GL.until); if(GL.audioNew!==false){ GL.audioNew=false; GL.capT0=at; } s.start(at); GL.until=at+buf.duration; GL.capT1=GL.until; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
 function glHushAudio(){ GL.srcs.forEach(function(s){ try{ s.stop(); }catch(e){} }); GL.srcs=[]; GL.until=0; }
 function glMsg(m){ var sc=m.serverContent;
   if(m.toolCall||(m.serverContent&&(m.serverContent.modelTurn||m.serverContent.outputTranscription))) glDisarm();
@@ -821,16 +746,20 @@ function glMsg(m){ var sc=m.serverContent;
   if(m.toolCall){ var heard=GL.heard&&!(GL.overBot&&glEcho(GL.you)); glTools(m.toolCall.functionCalls||[],heard); }
   if(!sc) return;
   ((sc.modelTurn&&sc.modelTurn.parts)||[]).forEach(function(p){ if(p.inlineData&&p.inlineData.data) glPlay(p.inlineData.data); });
-  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); if(GL.you.trim().split(/\s+/).length>=2) glArm(12000); }
+  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
   if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.shown=''; GL.cap=(GL.cap||0)+1; GL.newBot=false; GL.newYou=true; GL.heard=false; fadeYou(); }
-    var piece=sc.outputTranscription.text, cap=GL.cap, lag=GL.outCtx&&sound?Math.max(0,(GL.lastStart||0)-GL.outCtx.currentTime):0; GL.said+=piece;
-    setTimeout(function(){ if(cap!==GL.cap) return; GL.shown+=piece; setQ(GL.shown.trim()); },lag*1000); }
-  if(sc.interrupted){ glHushAudio(); GL.newBot=true; }
-  if(sc.generationComplete) GL.newBot=true;
-  if(sc.turnComplete){ var capEnd=GL.cap, endLag=GL.outCtx&&sound?Math.max(0,GL.until-GL.outCtx.currentTime):0; setTimeout(function(){ if(capEnd===GL.cap&&GL.said) setQ(GL.said.trim()); },endLag*1000+300); /* never leave a caption half-written */
-    GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); else if(GL.goAway) glRenew(); } }
+    GL.said+=sc.outputTranscription.text; }
+  if(sc.interrupted){ glHushAudio(); GL.capT1=0; GL.newBot=true; GL.audioNew=true; }
+  if(sc.generationComplete){ GL.newBot=true; GL.audioNew=true; }
+  if(sc.turnComplete){ GL.audioNew=true; GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); else if(GL.goAway) glRenew(); } }
 /* Google sends goAway shortly before it ends a session: switch to a fresh one between sentences */
 function glRenew(){ GL.goAway=false; var n=0, iv=setInterval(function(){ if(glSpeaking()&&++n<100) return; clearInterval(iv); if(!GL.on||!botOn) return; var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(1000,'renew'); }catch(e){} } glDropped(); },100); }
+/* the caption follows the voice: words appear at the pace the audio plays (text arrives faster than speech) */
+function capTick(){ if(!GL.on) return; var full=GL.said, n=full.length, ctx=GL.outCtx;
+  if(ctx&&sound&&GL.capT1>GL.capT0&&ctx.currentTime<GL.capT1){ n=Math.floor(Math.max(0,ctx.currentTime-GL.capT0)/(GL.capT1-GL.capT0)*full.length); var sp=full.lastIndexOf(' ',n); n=sp>0?sp:0; }
+  if(GL.shown&&full.indexOf(GL.shown)===0&&n<GL.shown.length) return; /* never step back within a sentence */
+  var show=full.slice(0,n).trim(); if(show!==GL.shown){ GL.shown=show; setQ(show); } }
+setInterval(capTick,50);
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
 /* orb, talk box and pill follow the live audio */
 setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&!glSpeaking()); },100);
@@ -884,7 +813,7 @@ async function glAnalyse(){ var t=run; try{ glHush(); await liveAnalyse(t); chec
     else { if(popOpen()) finishAnalysis(); glApp('Nothing is missing. Begin with: '+afterDocsNote()+' '+glNext()); } }
   catch(e){ if(!(e instanceof Cancel)) console.error(e); } }
 /* a stage opened by the person (or after processing): tell the bot what is on screen */
-function glStage(k){ return async function(t){ await wait(k==='intro'?300:500,t); if(glQuiet()) return; var o=null, note='';
+function glStage(k){ return async function(t){ await wait(150,t); if(glQuiet()) return; var o=null, note='';
   if(k==='intro'){ o={line:S.intro[0]}; note='The builder just opened. Greet the person briefly.'; }
   else if(k==='basics'){ o=basicsOpener(); note='Step 1, Basics, is on screen. Field ids: name, phone, mode, voice.'; }
   else if(k==='details'){ if(analysed&&!popOpen()&&EXTRA.some(function(x){ var f=$('#f-'+x.id); return f&&f.parentNode!==$('#extraGrid'); })) finishAnalysis();
@@ -914,7 +843,7 @@ $('#liveRetry').onclick=function(){ $('#liveErr').hidden=true; botOn=true; GL.re
 function glDropped(){ GL.ws=null; aiLiveLabel(); if(!botOn||!$('#overlay').classList.contains('on')) return; GL.resume=true;
   if(busy) glReconnect().catch(function(){}); else start(SCRIPT[stage]); }
 function glStalled(){ if(!GL.on||!botOn) return; console.warn('Gemini Live stopped replying, reconnecting'); var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(); }catch(e){} } GL.lost=true; glDropped(); }
-function glArm(ms){ clearTimeout(GL.dog); GL.dog=setTimeout(glStalled,ms||12000); }
+function glArm(ms){ clearTimeout(GL.dog); GL.dog=setTimeout(glStalled,ms||15000); }
 function glDisarm(){ clearTimeout(GL.dog); }
 function aiLiveLabel(){ if(GL.on){ $('#dAi').textContent='AI: Gemini Live'; $('#dAi').className='ok'; $('#dAi').title='Connected over WebSocket to Gemini Live'; } else if(!aiDown) aiStatus(true); }
 
@@ -977,10 +906,8 @@ function editAssistant(id){ var a=loadList().filter(function(x){ return x.id===i
   botOn=false; dirty=false; setStage('basics'); setQ('Editing '+a.name+'. Change anything you need, then press Save changes.'); setYou(''); setOrb('idle'); refresh(); }
 $('#formPane').addEventListener('input',markDirty); $('#formPane').addEventListener('change',markDirty);
 
-async function askGenerate(t){ var g=$('#genBtn'); g.scrollIntoView({block:'center',behavior:'smooth'}); g.classList.add('cue'); await say(S.askGen[0],t); if(!autoAns) return; await wait(1800,t); await hear(S.askGen[1],t); await press(g,t); runFlow('gen'); }
-
 function chooseBot(){ botOn=true; TALK=true; progMax=0; $('#card').classList.add('talking'); setStage('basics'); progress(); start(SCRIPT.basics); }
-function chooseManual(){ run++; stopSpeech(); botOn=false; openForm(); setStage('basics'); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
+function chooseManual(){ run++; botOn=false; glHushAudio(); openForm(); setStage('basics'); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
 function pickSource(k){ source=k; markDirty(); if(k==='upload') revealForm(); progress(); $('#srcGen').classList.remove('cue'); $('#srcUp').classList.remove('cue'); go(k==='gen'?'details':'upload'); }
 $('#introBot').onclick=chooseBot; $('#introManual').onclick=chooseManual;
 $('#srcGen').onclick=function(){ pickSource('gen'); }; $('#srcUp').onclick=function(){ pickSource('upload'); };
@@ -1019,30 +946,6 @@ function closePop(){ $('#pop').classList.remove('on'); }
 function row(title){ return '<li><span class="ic"></span><span class="t"><b>'+title+'</b><small></small></span><em>Waiting</em></li>'; }
 function setRow(li,cls,em,small){ li.className=cls; li.querySelector('em').textContent=em; if(small!=null) li.querySelector('small').textContent=small; }
 
-async function analyse(t){ check(t); EXTRA=DEF_EXTRA.slice(); busy=true; setOrb('work'); refresh();
-  var names=['Company profile','Agent identity and role','Goal, tone and language','Documents','Guidelines and restrictions','Working hours','Human handoff'];
-  openPop('<div class="popHead"><span class="spin" id="anSpin"></span><div><h3 id="anTitle">Analyzing your answers</h3><p id="anSub">Checking that the prompt has everything it needs.</p></div></div><ul class="rows" id="anList">'+names.map(row).join('')+'</ul><div class="grid2" id="anFields" hidden></div><div class="popFoot" id="anFoot" hidden><button class="btn pri" id="anGo">Continue</button></div>');
-  await narrate(S.analyze,t);
-  var lis=$('#anList').children, miss=[];
-  for(var i=0;i<lis.length;i++){ setRow(lis[i],'run','Checking'); await wait(520,t);
-    if(i===5&&!val('hours')){ setRow(lis[i],'miss','Missing','Callers will ask when you are open'); miss.push('hours'); }
-    else if(i===6&&!val('handoff')){ setRow(lis[i],'miss','Missing','Needed for emergencies and escalations'); miss.push('handoff'); }
-    else setRow(lis[i],'ok','OK',i===3?(docs.length?docs.length+' file read':'None added (optional)'):(i===4?(val('guide')?'':'None added (optional)'):'')); }
-  if(miss.length){
-    $('#anTitle').textContent='Two details are missing'; $('#anSub').textContent='I created these inputs for you. Answer out loud or type them in.'; $('#anSpin').hidden=true;
-    var g=$('#anFields'); g.hidden=false; if(!$('#f-hours')){ g.innerHTML='<div class="field" id="f-hours"><div class="lab"><label for="i-hours">Working hours <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-hours" placeholder="e.g. Mon to Fri, 9 am to 6 pm"></div><div class="field" id="f-handoff"><div class="lab"><label for="i-handoff">Human handoff <i>*</i></label><span class="badge"></span></div><input class="ctl" id="i-handoff" placeholder="Who should take over a call"></div>'; }
-    else { g.appendChild($('#f-hours')); g.appendChild($('#f-handoff')); }
-    $('#anFoot').hidden=false; var goP=new Promise(function(r){ $('#anGo').onclick=r; });
-    if(botOn){ try{ await say(S.missing,t);
-        await ask('hours',S.hours,function(t){ return typeText('hours',S.hours[2],t); },t); setRow(lis[5],'ok','OK','');
-        await ask('handoff',S.handoff,function(t){ return typeText('handoff',S.handoff[2],t); },t); setRow(lis[6],'ok','OK',''); await wait(600,t);
-      }catch(e){ check(t); await race(goP,t); } }
-    else { await race(goP,t); }
-    var eg=$('#extraGrid'); eg.appendChild($('#f-hours')); eg.appendChild($('#f-handoff')); $('#extraBox').hidden=false;
-  } else { $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(700,t); }
-  analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); await wait(350,t); }
-async function race(p,t){ var ok=false; p.then(function(){ ok=true; }); while(!ok){ await sleep(80); check(t); } }
-
 async function pipeline(kind,t){ check(t); busy=true; setOrb('work'); refresh(); var steps=PIPE[kind];
   openPop('<div class="popHead"><span class="spin" id="plSpin"></span><div><h3 id="plTitle">'+(kind==='gen'?'Creating your system prompt':'Checking your system prompt')+'</h3><p id="plSub">Processing…</p></div></div><div class="bar"><i id="plBar"></i></div><ul class="rows" id="plList">'+steps.map(function(s){return row(s[0]);}).join('')+'</ul><div class="sim" id="plSim" hidden></div>');
   var lis=$('#plList').children, bar=$('#plBar');
@@ -1057,7 +960,7 @@ async function pipeline(kind,t){ check(t); busy=true; setOrb('work'); refresh();
 
 function runFlow(kind){ source=kind; $('#genBtn').classList.remove('cue');
   if(kind==='gen'&&!analysed&&live&&botOn){ start(SCRIPT.details); return; }
-  start(async function(t){ if(kind==='gen'&&!analysed){ if(!live){ await analyse(t); } else { await liveAnalyse(t); if(popOpen()&&missingNow().length) return; /* the person fills the new inputs, presses Continue, then Generate again */ } } if(popOpen()) finishAnalysis();
+  start(async function(t){ if(kind==='gen'&&!analysed){ await liveAnalyse(t); if(popOpen()&&missingNow().length) return; /* the person fills the new inputs, presses Continue, then Generate again */ } if(popOpen()) finishAnalysis();
     var pr=(live&&kind==='gen')?agent({kind:'prompt',fields:allFields()},null,40000).catch(function(){ return null; }):null;
     await pipeline(kind,t); var out=pr?await pr:null; check(t);
     if(live&&kind==='gen'&&!out) toast('The AI prompt writer did not answer, so this prompt uses the built-in template.');
@@ -1082,7 +985,7 @@ async function streamPrompt(t){ var e=$('#prompt'); e.value=''; for(var i=0;i<pr
 $('#editBtn').onclick=function(){ var e=$('#prompt'); var on=e.readOnly; e.readOnly=!on; e.classList.toggle('edit',on); this.textContent=on?'Done editing':'Edit prompt'; if(on) e.focus(); };
 $('#regenBtn').onclick=function(){ runFlow(source||'gen'); };
 $('#dlBtn').onclick=function(){ var a=document.createElement('a'); a.href=URL.createObjectURL(new Blob([$('#prompt').value],{type:'text/markdown'})); a.download='system_prompt.md'; a.click(); };
-function save(){ run++; stopSpeech();
+function save(){ run++;
   var item={id:editId||Date.now(),name:val('name')||'Untitled assistant',phone:val('phone'),mode:mode,voice:($('#i-voice').value||'').split(' (')[0],
     company:val('company'),industry:val('industry'),agent:val('agent'),role:val('role'),goal:val('goal'),language:val('language'),tone:val('tone'),guide:val('guide'),guideSkipped:!!asked.guide&&!val('guide'),
     docs:docs.slice(),docFacts:docFacts,docsSkipped:!!asked.docs&&!docs.length,extra:EXTRA.map(function(x){ return {id:x.id,label:x.label,question:x.question,placeholder:x.placeholder,found:!!x.found,value:val(x.id)}; }),
@@ -1101,11 +1004,11 @@ function clearStage(){ var ids=stage==='basics'?['name','phone','voice']:(stage=
   if(stage==='details'){ docs=[]; docData=[]; docFacts=''; asked.docs=false; mark('docs',null); $('#docFiles').innerHTML=''; analysed=false; $('#extraBox').hidden=true; $('#extraGrid').innerHTML=''; EXTRA=[]; }
   if(stage==='upload'){ upFile=''; $('#upFiles').innerHTML=''; mark('up',null); footer(); } }
 $('#playBtn').onclick=function(){
-  if(botOn){ botOn=false; stopSpeech(); revealForm(); if(stage==='intro'){ run++; openForm(); setStage('basics'); setQ(S.manual); setYou(''); } if(!busy) setOrb('idle'); refresh(); return; }
+  if(botOn){ botOn=false; glHushAudio(); revealForm(); if(stage==='intro'){ run++; openForm(); setStage('basics'); setQ(S.manual); setYou(''); } if(!busy) setOrb('idle'); refresh(); return; }
   botOn=true; refresh(); if(busy) return; if(stage==='intro'){ start(SCRIPT.intro); return; } start(SCRIPT[stage]); };
 $('#redoBtn').onclick=function(){ if(stage==='intro'){ botOn=true; start(SCRIPT.intro); return; } if(stage==='result'){ runFlow(source||'gen'); return; } closePop(); busy=false; clearStage(); botOn=true; setStage(stage); start(SCRIPT[stage]); };
-$('#sndBtn').onclick=function(){ sound=!sound; if(!sound) stopSpeech(); refresh(); };
-function resetAll(){ run++; stopSpeech(); glClose(); GL.resume=GL.lost=false; GL.note=''; $('#liveErr').hidden=true; $('.fHead h2').textContent='Create Voice Assistant'; dirty=false; TALK=false; $('#card').classList.remove('talking'); $('#prog').hidden=true; editId=null; botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
+$('#sndBtn').onclick=function(){ sound=!sound; if(!sound) glHushAudio(); refresh(); };
+function resetAll(){ run++; glClose(); GL.resume=GL.lost=false; GL.note=''; $('#liveErr').hidden=true; $('.fHead h2').textContent='Create Voice Assistant'; dirty=false; TALK=false; $('#card').classList.remove('talking'); $('#prog').hidden=true; editId=null; botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
   ['basics','details','upload'].forEach(function(s){ stage=s; clearStage(); }); asked={}; partial={}; source=''; promptText=''; $('#prompt').value=''; $('#anRows').innerHTML=''; $('#i-persona').value=''; cnt();
   [].forEach.call(document.querySelectorAll('.cue'),function(b){ b.classList.remove('cue'); });
   $('#card').classList.remove('open'); $('#talk').hidden=true; setStage('intro'); setQ(''); setYou(''); setOrb('idle'); }
@@ -1117,20 +1020,13 @@ function openDemo(){ resetAll(); if(aiDown){ aiDown=false; pingAi(); } $('#overl
 $('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#vClose').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
 $('#demoTog').onclick=function(){ var h=$('#demo').classList.toggle('hide'); this.classList.toggle('on',!h); this.setAttribute('aria-label',h?'Show demo controls':'Hide demo controls'); };
 if(params.has('demo')){ $('#demo').classList.remove('hide'); $('#demoTog').classList.add('on'); }
-$('#dAuto').onclick=function(){ autoAns=!autoAns; this.textContent='Auto-answer: '+(autoAns?'on':'off'); this.classList.toggle('on',autoAns); };
-$('#dBarge').onclick=function(){ BARGE.on=!BARGE.on; this.textContent='Interruptions: '+(BARGE.on?'on':'off'); this.classList.toggle('on',BARGE.on); };
-$('#dUser').onclick=function(){ speakAns=!speakAns; this.textContent='Speak answers: '+(speakAns?'on':'off'); this.classList.toggle('on',speakAns); };
-$('#dLive').onclick=function(){ setLive(!live); if(botOn&&!busy&&stage!=='intro') start(SCRIPT[stage]); else if(botOn&&stage==='intro') start(SCRIPT.intro); };
-function voiceOffQuiet(){ gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); }
-function pingAi(){ if(location.protocol==='file:'){ aiDown=true; voiceOffQuiet(); aiStatus(false,'Opened as a file: run node server.js and open http://localhost:3000');
+$('#dBarge').onclick=function(){ BARGE.on=!BARGE.on; if(BARGE.on&&GL.outCtx) glLoopback(); this.textContent='Interruptions: '+(BARGE.on?'on':'off'); this.classList.toggle('on',BARGE.on); };
+function pingAi(){ if(location.protocol==='file:'){ aiDown=true; aiStatus(false,'Opened as a file: run node server.js and open http://localhost:3000');
     /* Opened as a file: Chrome asks for the mic before every answer and Gemini is unreachable. Switch to the local server if it is running. */
     fetch('http://localhost:3000/healthz',{mode:'no-cors'}).then(function(){ location.replace('http://localhost:3000/'+location.search); })
       .catch(function(){ toast('Opened as a file, so the mic asks every time and Gemini is off. Run node server.js and open http://localhost:3000'); });
-    return; } rawAgent({kind:'ping'},15000).then(function(){ aiDown=false; aiStatus(true); }).catch(function(e){ aiDown=true; aiDownAt=Date.now(); voiceOffQuiet(); aiStatus(false,e.message); toast('Gemini is not connected: '+e.message); }); }
-$('#dVoiceSel').onchange=function(){ var n=this.value, v=(synth?synth.getVoices():[]).filter(function(x){ return x.name===n; })[0]; if(!v) return; botVoice=v; try{ localStorage.setItem('va_voice',n); }catch(e){}
-  gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); try{ synth.cancel(); var u=new SpeechSynthesisUtterance('Hello, I am your assistant builder.'); u.voice=v; u.lang=v.lang; synth.speak(u); }catch(e){} };
-$('#dVoice').onclick=function(){ gemVoice=!gemVoice; this.textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); this.classList.toggle('on',gemVoice); };
-setLive(live); $('#dBarge').textContent='Interruptions: '+(BARGE.on?'on':'off'); $('#dBarge').classList.toggle('on',BARGE.on); $('#dVoice').textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); $('#dVoice').classList.toggle('on',gemVoice); pingAi(); pickVoices(); renderDash(); setStage('intro'); setOrb('idle');
+    return; } rawAgent({kind:'ping'},15000).then(function(){ aiDown=false; aiStatus(true); }).catch(function(e){ aiDown=true; aiDownAt=Date.now(); aiStatus(false,e.message); toast('Gemini is not connected: '+e.message); }); }
+$('#dBarge').textContent='Interruptions: '+(BARGE.on?'on':'off'); $('#dBarge').classList.toggle('on',BARGE.on); pingAi(); renderDash(); setStage('intro'); setOrb('idle');
 })();
 </script>
 </body>

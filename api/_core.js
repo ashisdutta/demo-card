@@ -121,47 +121,9 @@ function callGemini(system, payload, maxTokens, temperature, ms, opts) {
   });
 }
 
-/* ---- optional Gemini text to speech (Interactions API). The browser falls back to its own voice if this fails. ---- */
-// Default voice: female Indian English (en-IN) from the Gemini voice library (GET /v1beta/voices?language_code=en-IN).
-// There is no "Nova" voice in the library. Override with GEMINI_TTS_VOICE, for example en-in-csagent-5 or en-in-assistant-3.
-const DEFAULT_TTS_VOICE = 'en-in-concierge-2';
-// Free tier allows only 3 requests a minute per TTS model, so the second model is a quota fallback.
-const DEFAULT_TTS_MODELS = ['gemini-3.8-flash-lite-tts', 'gemini-3.8-flash-tts'];
-
-async function callTTS(text) {
-  const key = process.env.GEMINI_API_KEY;
-  if (!key) { const e = new Error('GEMINI_API_KEY is not set on the server'); e.status = 500; throw e; }
-  const voice = process.env.GEMINI_TTS_VOICE || DEFAULT_TTS_VOICE;
-  const models = [process.env.GEMINI_TTS_MODEL].concat(DEFAULT_TTS_MODELS).filter((m, i, a) => m && a.indexOf(m) === i);
-  let lastErr = null;
-  for (const model of models) {
-    const ctl = new AbortController();
-    const timer = setTimeout(() => ctl.abort(), 12000);
-    try {
-      const r = await fetch('https://generativelanguage.googleapis.com/v1beta/interactions', {
-        method: 'POST', signal: ctl.signal,
-        headers: { 'content-type': 'application/json', 'x-goog-api-key': key },
-        body: JSON.stringify({
-          model: model,
-          input: [{ type: 'user_input', content: [{ type: 'text', text: text }] }],
-          response_format: { type: 'audio' },
-          generation_config: { speech_config: [{ voice: voice }] }
-        })
-      });
-      const data = await r.json().catch(() => ({}));
-      if (!r.ok) throw Object.assign(new Error((data.error && data.error.message) || ('Gemini TTS returned ' + r.status)), { status: r.status });
-      let found = null;
-      (function walk(o) { if (found || !o || typeof o !== 'object') return; if (o.type === 'audio' && typeof o.data === 'string') { found = o; return; } Object.keys(o).forEach((k) => walk(o[k])); })(data);
-      if (!found) throw Object.assign(new Error('Gemini TTS returned no audio'), { status: 502 });
-      return { audio: found.data, mime: found.mime_type || 'audio/wav', voice: voice };
-    } catch (e) {
-      lastErr = e.name === 'AbortError' ? Object.assign(new Error('Gemini TTS timed out'), { status: 504 }) : e;
-      if (!retryable(lastErr)) break;
-      console.warn('[tts] ' + model + ': ' + lastErr.message.slice(0, 120) + ', trying the next model');
-    } finally { clearTimeout(timer); }
-  }
-  throw Object.assign(lastErr || new Error('No Gemini TTS model available'), { status: lastErr && lastErr.status === 429 ? 429 : 502 });
-}
+// Bot voice for Gemini Live: female Indian English (en-IN) from the Gemini voice library (GET /v1beta/voices?language_code=en-IN).
+// Only gemini-3.8-live accepts these voices. Override with GEMINI_LIVE_VOICE, for example en-in-csagent-5 or en-in-assistant-3.
+const DEFAULT_LIVE_VOICE = 'en-in-concierge-2';
 
 /* ---- Gemini Live: one WebSocket per build, opened by the browser straight to Gemini with a short-lived token.
    The instructions, tools and voice are locked into the token here, so the key and the bot's rules never reach the page.
@@ -169,7 +131,7 @@ async function callTTS(text) {
 const LIVE_WS = 'wss://generativelanguage.googleapis.com/ws/google.ai.generativelanguage.v1beta.GenerativeService.BidiGenerateContentConstrained';
 const LIVE_SYSTEM = [
   'You are the voice setup assistant inside a "Create Voice Assistant" form on a voice AI platform. You talk with the person who is building a phone assistant and you fill in the form for them while they watch.',
-  'Speak natural Indian English. Keep every turn to one or two short sentences and ask for one field at a time. No lists, no markdown.',
+  'Always speak natural Indian English, in English only. Never switch to Hindi, Hinglish or any other language, even if the person uses one; if they answer in another language, write the value in English and keep speaking English. Keep every turn to one or two short sentences and ask for one field at a time. No lists, no markdown.',
   '',
   'Messages that start with [App] come from the app, not from the person. They tell you what is on screen and what to ask. Never read them aloud and never mention the app. When an [App] message or a tool result contains "Say:" followed by a line, say that line in your own natural words, keep its meaning, and add nothing else.',
   '',
@@ -200,7 +162,7 @@ async function liveToken() {
       bidiGenerateContentSetup: {
         model: 'models/' + model,
         generationConfig: { responseModalities: ['AUDIO'], temperature: 0.4,
-          speechConfig: { voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.GEMINI_LIVE_VOICE || process.env.GEMINI_TTS_VOICE || DEFAULT_TTS_VOICE } } } },
+          speechConfig: { languageCode: 'en-IN', voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.GEMINI_LIVE_VOICE || DEFAULT_LIVE_VOICE } } } },
         systemInstruction: { parts: [{ text: LIVE_SYSTEM }] },
         tools: LIVE_TOOLS,
         inputAudioTranscription: {}, outputAudioTranscription: {}
@@ -235,7 +197,7 @@ async function handle(body) {
   try {
     const b = body && typeof body === 'object' ? body : {};
     const kind = clip(b.kind, 12);
-    if (!['analyze', 'prompt', 'tts', 'ping', 'live'].includes(kind)) return { status: 400, json: { error: 'Unknown kind' } };
+    if (!['analyze', 'prompt', 'ping', 'live'].includes(kind)) return { status: 400, json: { error: 'Unknown kind' } };
     if (limited()) return { status: 429, json: { error: 'Too many requests, try again in a minute' } };
     const fields = cleanFields(b.fields);
     if (kind === 'ping') {
@@ -246,12 +208,6 @@ async function handle(body) {
     if (kind === 'live') {
       if (process.env.MOCK_AGENT) return { status: 501, json: { error: 'No Gemini Live in mock mode' } };
       return { status: 200, json: await liveToken() };
-    }
-    if (kind === 'tts') {
-      if (process.env.MOCK_AGENT) return { status: 501, json: { error: 'No voice in mock mode' } };
-      const text = clip(b.text, 500).trim();
-      if (!text) return { status: 400, json: { error: 'No text' } };
-      return { status: 200, json: await callTTS(text) };
     }
     if (process.env.MOCK_AGENT) return { status: 200, json: mock(kind, Object.assign({}, b, { fields: fields })) };
 

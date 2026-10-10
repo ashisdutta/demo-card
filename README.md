@@ -11,13 +11,13 @@ assistant to the dashboard.
 | Conversation and field filling | Real: Gemini Live (`gemini-3.8-live`) over one WebSocket per build. Gemini hears the mic, speaks in an Indian English voice and fills fields through tool calls |
 | Missing-detail analysis, system prompt, analytics fields | Real, Gemini text models (the Live model answers only in audio) |
 | Dashboard cards | Edit and Configure reopen the builder with the saved values, Duplicate, Delete. Call is demo only: nothing is dialled |
-| Speech input and bot voice | Gemini Live hears the microphone and answers in its own Indian English voice (`en-in-concierge-2`). You can also type answers. There is no backup voice |
+| Speech input and bot voice | Gemini Live hears the microphone and answers in its own Indian English voice (`en-in-concierge-2`), always in English (`en-IN`). You can also type answers. There is no backup voice and no scripted mode |
 | Form | One scrolling page: Basics, then the system prompt section, then the generated prompt and analytics. Editing a saved assistant shows Save changes and keeps nothing until it is pressed |
 | Company documents | Real: PDF and images go to Gemini, Word and text files are read in the browser (up to 3 files, about 3 MB). The analysis fills details it finds in them and asks only for what is still missing; their key facts go into the system prompt |
 | System prompt upload, validation, simulation | Demo only (animation) |
 | Saving | Saved in the browser (localStorage), shown on the Assistants page |
 
-Nothing is filled in until the user answers. If a Gemini call fails (quota, timeout, overload), the server first tries the next model. If that fails too, the demo bar shows "AI: offline" and the bot keeps going for about 20 seconds by writing down what the user says (it skips questions, stalls and bare yes/no), then tries Gemini again. The scripted self-playing run only starts if you switch Mode to scripted.
+Nothing is filled in until the user answers. The analysis and prompt writer try the next text model if one fails (quota, timeout, overload). The voice conversation repairs its own connection (see below).
 
 ## Build-with-me flow
 
@@ -48,15 +48,12 @@ This works on Vercel because the WebSocket goes from the browser to Google, not 
 
 - `GEMINI_API_KEY` (required)
 - `GEMINI_MODEL` (optional, default tries `gemini-3.5-flash-lite` then `gemini-3.8-flash`)
-- `GEMINI_TTS_VOICE` (optional, default `en-in-concierge-2`, female Indian English). Other Indian voices: `en-in-csagent-5`, `en-in-assistant-3`, `en-in-podcaster-4`, or list them with `GET https://generativelanguage.googleapis.com/v1beta/voices?language_code=en-IN`
-- `GEMINI_TTS_MODEL` (optional, default tries `gemini-3.8-flash-lite-tts` then `gemini-3.8-flash-tts`)
 - `GEMINI_LIVE_MODEL` (optional, default `gemini-3.8-live`)
-- `GEMINI_LIVE_VOICE` (optional, default `GEMINI_TTS_VOICE` or `en-in-concierge-2`)
+- `GEMINI_LIVE_VOICE` (optional, default `en-in-concierge-2`, female Indian English). Other Indian voices: `en-in-csagent-5`, `en-in-assistant-3`, `en-in-podcaster-4`. Only `gemini-3.8-live` accepts these voices
 
-### Free tier limits (measured October 2026)
+### Text model limits (free tier, measured October 2026)
 
 - Text: about 15 requests a minute per model. A conversation uses one request per answer, so this is fine; a 429 moves to the next model.
-- Voice: 3 requests a minute per TTS model, and every bot line is one request. That is why the Gemini voice is off by default: on the free tier it runs out within a minute and the page switches to the browser voice. Turn it on for demos only with a paid key. It also adds about 5 seconds before each bot line.
 
 Never put the key in `index.html` or commit it. `.env` is in `.gitignore`.
 
@@ -92,10 +89,9 @@ Hidden by default. Click the small round button at the bottom right to show it, 
 
 
 - Restart: start the flow again
-- Mode: live AI or scripted (scripted plays sample answers by itself, with the browser voice; it is a separate demo mode, not a backup)
-- Bot voice and the voice list: only used by scripted mode
+- Interruptions: off by default, so the mic pauses while the bot talks (smoothest on speakers in a room). Turn on to let people talk over the bot; then the bot's voice plays through a WebRTC connection so Chrome removes its echo. `?interrupt=1` starts with it on.
 
-URL options: `?scripted=1` starts in scripted mode, `?mute=1` starts with sound off, `?geminivoice=1` starts with the Gemini voice.
+URL options: `?mute=1` starts with sound off, `?interrupt=1` turns interruptions on, `?demo=1` shows the demo bar.
 
 ## Browser voice and microphone
 
