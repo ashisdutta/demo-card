@@ -481,10 +481,10 @@ var S={
  guide:['Any guidelines or restrictions I should follow? This one is optional.','Never give medical advice, and transfer emergencies to a human.','Never give medical advice. Transfer emergencies to a human right away.'],
  analyze:'Give me a moment to check what I have.',
  missing:'Two details are missing. I have added them here.',
- docsReveal:'I have filled in everything you told me, so take a look. If you have documents about your services or prices, upload them in this box and I will read them, or say skip.',
+ docsReveal:'I have filled in everything you told me. Please verify the details on the form, and upload any documents about your services or prices in this box. Then let me know when I should generate the prompt.',
  hours:['What are your working hours?','Monday to Friday eight to six, and Saturday nine to two.','Mon to Fri 8 am to 6 pm, Sat 9 am to 2 pm'],
  handoff:['Where should I transfer a caller who needs a human?','To the front desk line.','Front desk line, +91 80 4718 2200'],
- askGen:['That is everything I need. Shall I generate the prompt?','Yes, go ahead.'],
+ askGen:['That is everything I need. Please verify the details once more, and let me know when I should generate the prompt.','Yes, go ahead.'],
  upAsk:'Drop your system prompt file here, or click to choose it.',
  upGot:['Got it. Shall I validate and test it?','Yes, please.'],
  result:['Your prompt is ready. I also created six analytics fields and an analytics persona from it. Want to change anything?','Looks good. Save it.'],
@@ -550,7 +550,7 @@ function speak(text,t,asUser){ if(sound&&gemVoice&&!asUser) return gemSpeak(text
     }catch(e){ to=setTimeout(function(){fin(true);},est); }
   } else { to=setTimeout(function(){fin(true);},est); }
 });}
-async function say(text,t){ need(t); if(GL.on){ if(!glQuiet()) glApp('Say: '+text); return; } setQ(text); setYou(''); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
+async function say(text,t){ need(t); if(GL.on){ if(!glQuiet()) glApp('Say: '+text); return; } setQ(text); fadeYou(); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
 async function narrate(text,t){ if(!botOn) return; try{ await say(text,t); }catch(e){ check(t); } setOrb('work'); }
 async function hear(text,t){ need(t); setOrb('listen'); refresh(); var sp=speakAns?speak(text,t,true):null; var el=$('#you'); el.classList.remove('ph');
   for(var i=1;i<=text.length;i++){ el.textContent=text.slice(0,i); await sleep(24); need(t); }
@@ -558,7 +558,9 @@ async function hear(text,t){ need(t); setOrb('listen'); refresh(); var sp=speakA
 
 /* ---------- small UI helpers ---------- */
 function setQ(s){ $('#q').textContent=s; }
-function setYou(s){ var el=$('#you'); if(s){ el.textContent=s; el.classList.remove('ph'); } else { el.textContent='Your answer shows up here as you speak.'; el.classList.add('ph'); } }
+var youT=null;
+function fadeYou(){ clearTimeout(youT); youT=setTimeout(function(){ setYou(''); },1000); }
+function setYou(s){ var el=$('#you'); clearTimeout(youT); if(s){ el.textContent=s; el.classList.remove('ph'); } else { el.textContent='Your answer shows up here as you speak.'; el.classList.add('ph'); } }
 var orbState='idle';
 function setOrb(s){ orbState=s; $('#stage').className='stage '+s; }
 function refresh(){ if(TALK) progress(); var p=$('#pill'),tx='Paused',c='';
@@ -888,7 +890,7 @@ function glMsg(m){ var sc=m.serverContent;
   if(!sc) return;
   ((sc.modelTurn&&sc.modelTurn.parts)||[]).forEach(function(p){ if(p.inlineData&&p.inlineData.data) glPlay(p.inlineData.data); });
   if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
-  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.newBot=false; GL.newYou=true; GL.heard=false; } GL.said+=sc.outputTranscription.text; setQ(GL.said.trim()); }
+  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.newBot=false; GL.newYou=true; GL.heard=false; fadeYou(); } GL.said+=sc.outputTranscription.text; setQ(GL.said.trim()); }
   if(sc.interrupted) glHushAudio();
   if(sc.turnComplete){ GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); } }
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
@@ -938,7 +940,7 @@ function glNext(){ var e=schema().filter(function(f){ return !f.value; })[0];
     return ask(e); }
   if(stage==='details'){ if(e) return e.id==='docs'?glDocs():ask(e); if(popOpen()) finishAnalysis(); var g=$('#genBtn'); g.classList.add('cue'); g.scrollIntoView({block:'center',behavior:'smooth'}); return 'All missing details are filled. Say: '+S.askGen[0]+' If they agree, press generate_prompt.'; }
   return ''; }
-function glDocs(){ var line=askDocs(); return 'The form is now open with their answers filled in. Next field: docs, a file upload only the person can do. Say: '+line+' If they say no or skip, call update_form with docs = skip.'; }
+function glDocs(){ var line=askDocs(); return 'The form is now open with their answers filled in. Next field: docs, a file upload only the person can do. Say: '+line+' Uploading is optional: if they say no, skip, or ask you to generate without uploading, call update_form with docs = skip.'; }
 async function glAnalyse(){ var t=run; try{ glHush(); await liveAnalyse(t); check(t);
     var mi=missingNow(); if(mi.length){ var x=mi[0]; mark(x.id,'active','Asking'); glApp('The check found missing details and created these fields: '+mi.map(function(e){ return e.id+' ('+e.label+')'; }).join(', ')+'. Say: '+afterDocsNote()+(mi.length>1?'A couple of details are still missing. ':'One detail is still missing. ')+x.question); }
     else { if(popOpen()) finishAnalysis(); glApp('Nothing is missing. Begin with: '+afterDocsNote()+' '+glNext()); } }
