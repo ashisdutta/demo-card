@@ -510,7 +510,7 @@ var sleep=function(ms){return new Promise(function(r){setTimeout(r,ms);});};
 function check(t){ if(t!==run) throw new Cancel(); }
 function need(t){ check(t); if(!botOn) throw new Cancel(); }
 async function wait(ms,t){ var e=0; while(e<ms){ await sleep(40); check(t); e+=40; } }
-function start(fn){ var t=++run; Promise.resolve().then(function(){return fn(t);}).catch(function(e){ if(!(e instanceof Cancel)) console.error(e); }).then(function(){ if(t===run){ setOrb('idle'); refresh(); } }); return t; }
+function start(fn){ var t=++run; Promise.resolve().then(function(){return fn(t);}).catch(function(e){ if(!(e instanceof Cancel)) console.error(e); }).then(function(){ if(t===run&&!GL.on){ setOrb('idle'); refresh(); } }); return t; } /* while Gemini Live is on, the orb follows the live audio */
 
 /* ---------- speech ---------- */
 /* the bot only speaks through Gemini Live; a new line waits for the current one to finish, so lines never cut each other off */
@@ -537,8 +537,8 @@ function refresh(){ if(TALK) progress(); var p=$('#pill'),tx='Paused',c='';
 function mark(id,state,text){ var f=$('#f-'+id); if(!f) return; f.classList.remove('is-active','is-done'); if(state) f.classList.add('is-'+state); var b=f.querySelector('.badge'); if(b) b.textContent=text||''; if(state==='active'&&!TALK) f.scrollIntoView({block:'center',behavior:'smooth'}); }
 function val(id){ var e=$('#i-'+id); return e?e.value.trim():''; }
 function has(id){ if(asked[id]) return true; if(id==='mode') return !!mode; if(id==='docs') return docs.length>0; return val(id)!==''; }
-async function typeText(id,text,t){ var e=$('#i-'+id); if(TALK){ e.value=text; return; } partial[id]=true; var step=text.length>80?3:1; for(var i=step;i<text.length+step;i+=step){ e.value=text.slice(0,i); if(e.tagName==='TEXTAREA') e.scrollTop=e.scrollHeight; await sleep(20); need(t); } e.value=text; partial[id]=false; }
-async function press(el,t){ need(t); el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('pressing'); await wait(TALK?0:300,t); el.classList.remove('pressing'); }
+async function typeText(id,text,t){ var e=$('#i-'+id); if(TALK||GL.on){ e.value=text; return; } partial[id]=true; var step=text.length>80?3:1; for(var i=step;i<text.length+step;i+=step){ e.value=text.slice(0,i); if(e.tagName==='TEXTAREA') e.scrollTop=e.scrollHeight; await sleep(20); need(t); } e.value=text; partial[id]=false; }
+async function press(el,t){ need(t); el.scrollIntoView({block:'center',behavior:'smooth'}); el.classList.add('pressing'); await wait(TALK||GL.on?0:300,t); el.classList.remove('pressing'); }
 function fit(){ var s=Math.min(1,(innerWidth-32)/1200,(innerHeight-76)/800); $('#fit').style.transform='scale('+s+')'; }
 addEventListener('resize',fit); fit();
 
@@ -622,17 +622,17 @@ function popOpen(){ return $('#pop').classList.contains('on'); }
 function cueSource(){ $('#f-source').scrollIntoView({block:'center',behavior:'smooth'}); $('#srcGen').classList.add('cue'); $('#srcUp').classList.add('cue'); }
 async function applyUpdates(us,t){ for(var k=0;k<us.length;k++){ var id=String(us[k].id||''), v=String(us[k].value||'').trim(); if(!v) continue;
     var skip=/^(skip|skipped|none|no|n\/a)$/i.test(v);
-    if(id==='mode'){ var m=/prem/i.test(v)?'premium':(/stand/i.test(v)?'standard':''); if(!m||m===mode) continue; mark('mode','active','Writing'); setMode(m); asked.mode=true; await wait(300,t); mark('mode','done','AI filled'); continue; }
+    if(id==='mode'){ var m=/prem/i.test(v)?'premium':(/stand/i.test(v)?'standard':''); if(!m||m===mode) continue; mark('mode','active','Writing'); setMode(m); asked.mode=true; await wait(TALK||GL.on?0:300,t); mark('mode','done','AI filled'); continue; }
     if(id==='docs'){ if(skip){ asked.docs=true; mark('docs','done','Skipped'); } continue; }
     if(id==='guide'&&skip){ asked.guide=true; mark('guide','done','Skipped'); continue; }
     var el=$('#i-'+id); if(!el||!$('#f-'+id)||!/^[a-z0-9_]+$/.test(id)) continue;
     mark(id,'active','Writing');
-    try{ if(el.tagName==='SELECT'){ var o=matchOption(el,v); if(!o){ mark(id,null); continue; } el.value=o.value; if(id==='phone'){ showPhoneChips(); } await wait(TALK?0:300,t); }
+    try{ if(el.tagName==='SELECT'){ var o=matchOption(el,v); if(!o){ mark(id,null); continue; } el.value=o.value; if(id==='phone'){ showPhoneChips(); } await wait(TALK||GL.on?0:300,t); }
       else await typeText(id,v,t); }
     catch(e){ if(partial[id]){ el.value=''; partial[id]=false; mark(id,null); } throw e; }
     asked[id]=true; mark(id,'done','AI filled');
     var xi=EXTRA.map(function(x){ return x.id; }).indexOf(id); if(xi>=0&&popOpen()){ var li=$('#anList').children[5+xi]; if(li) setRow(li,'ok','OK',''); }
-    await wait(TALK?0:250,t); } progress(); }
+    await wait(TALK||GL.on?0:250,t); } progress(); }
 
 /* analysis: the model decides what is missing and the inputs are created on the fly */
 function extraField(x){ var d=document.createElement('div'); d.className='field'; d.id='f-'+x.id; d.innerHTML='<div class="lab"><label><i>*</i></label><span class="badge"></span></div><input class="ctl">';
@@ -736,7 +736,7 @@ function glMicStart(){ if(!micStream||!GL.inCtx||GL.node) return; var ctx=GL.inC
    leftover echo level (learned while the bot talks). Then the last 0.5 s and everything after go to Gemini, which stops
    the bot. Short sounds, "hmm" and remaining echo do not cut it off. */
 var BARGE={on:!params.has('nointerrupt'),echo:0.004,run:0,pre:[]};
-function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk) return;
+function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk) return; glVoice(f);
   if(glSpeaking()&&!GL.barge){ if(!BARGE.on) return;
     var r=0; for(var i=0;i<f.length;i++) r+=f[i]*f[i]; r=Math.sqrt(r/f.length);
     BARGE.pre.push(f); if(BARGE.pre.length>5) BARGE.pre.shift();
@@ -744,6 +744,12 @@ function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk) return;
     BARGE.run=0; BARGE.echo=BARGE.echo*0.9+r*0.1; return; }
   if(!glSpeaking()){ GL.barge=false; BARGE.run=0; BARGE.pre=[]; }
   glPcm(f); }
+/* the moment the person stops talking (0.35 s quiet after speech), show Thinking; if Gemini heard words but says nothing for 6 s, prompt it to answer */
+function glVoice(f){ if(glSpeaking()) return; var r=0; for(var i=0;i<f.length;i++) r+=f[i]*f[i]; r=Math.sqrt(r/f.length); var now=performance.now();
+  if(r>Math.max(0.02,(GL.noise||0.004)*3)){ GL.talking=true; GL.lastVoice=now; GL.thinking=false; return; }
+  GL.noise=(GL.noise||0.004)*0.95+r*0.05;
+  if(GL.talking&&now-GL.lastVoice>350){ GL.talking=false; GL.thinking=true; clearTimeout(GL.nudgeT); GL.nudgeT=setTimeout(glNudge,6000); } }
+function glNudge(){ if(!GL.on||!botOn||!GL.thinking||!GL.heard||glSpeaking()) return; GL.thinking=false; glApp('The person has finished speaking. Respond to what they said now.'); }
 function glPcm(f){
   var b=new Int16Array(f.length); for(var i=0;i<f.length;i++){ var v=Math.max(-1,Math.min(1,f[i])); b[i]=v<0?v*32768:v*32767; }
   var u=new Uint8Array(b.buffer), s=''; for(var k=0;k<u.length;k+=4096) s+=String.fromCharCode.apply(null,u.subarray(k,k+4096));
@@ -754,7 +760,7 @@ function glPlay(b64){ var ctx=GL.outCtx; if(!ctx||!sound) return; var bin=atob(b
   var at=Math.max(ctx.currentTime+0.04,GL.until); if(GL.audioNew!==false){ GL.audioNew=false; GL.capT0=at; } s.start(at); GL.until=at+buf.duration; GL.capT1=GL.until; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
 function glHushAudio(){ GL.srcs.forEach(function(s){ try{ s.stop(); }catch(e){} }); GL.srcs=[]; GL.until=0; }
 function glMsg(m){ var sc=m.serverContent;
-  if(m.toolCall||(m.serverContent&&(m.serverContent.modelTurn||m.serverContent.outputTranscription))) glDisarm();
+  if(m.toolCall||(m.serverContent&&(m.serverContent.modelTurn||m.serverContent.outputTranscription))){ glDisarm(); clearTimeout(GL.nudgeT); GL.thinking=!!m.toolCall||(GL.thinking&&!(m.serverContent&&m.serverContent.modelTurn)); } /* Thinking lasts until the bot's voice starts */
   if(m.goAway){ GL.goAway=true; }
   if(m.toolCall){ var heard=GL.heard&&!(GL.overBot&&glEcho(GL.you)); glTools(m.toolCall.functionCalls||[],heard); }
   if(!sc) return;
@@ -778,7 +784,7 @@ function capTick(){ if(!GL.on) return; var full=GL.said.trim(), q=$('#q'), ctx=G
 setInterval(capTick,50);
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
 /* orb, talk box and pill follow the live audio */
-setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&(BARGE.on||!glSpeaking())); /* with interruptions on, the mic listens while the bot talks */ },100);
+setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy||GL.thinking?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&(BARGE.on||!glSpeaking())); /* with interruptions on, the mic listens while the bot talks */ },100);
 
 /* tools */
 async function glTools(calls,heard){ var out=[];
@@ -843,7 +849,7 @@ function glStage(k){ return async function(t){ await wait(150,t); if(glQuiet()) 
   if(TALK) note='The form is hidden: you collect the answers by voice and the app fills them in behind the scenes, so never refer to the screen. Field ids: name, phone, mode, voice, then company, industry, agent (sales representative name), role, goal, language, tone, guide.';
   if(GL.resume){ note='The connection was briefly lost and is back; never mention it. The form so far: '+JSON.stringify(glForm())+'. '+note; if(GL.lost) o.line='Sorry, I missed that. '+o.line; GL.resume=false; GL.lost=false; }
   if(o.f) mark(o.f,'active','Asking'); glApp(note+' Say: '+o.line); }; }
-function glStop(){ GL.on=false; glDisarm(); GL.goAway=false; glHushAudio(); try{ if(GL.src) GL.src.disconnect(); if(GL.node){ GL.node.port.onmessage=null; GL.node.disconnect(); } }catch(e){} GL.src=GL.node=null; GL.closeAfter=false; GL.quiet=false; }
+function glStop(){ GL.on=false; glDisarm(); GL.goAway=false; GL.thinking=GL.talking=false; clearTimeout(GL.nudgeT); glHushAudio(); try{ if(GL.src) GL.src.disconnect(); if(GL.node){ GL.node.port.onmessage=null; GL.node.disconnect(); } }catch(e){} GL.src=GL.node=null; GL.closeAfter=false; GL.quiet=false; }
 function glClose(){ var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(1000,'done'); }catch(e){} } aiLiveLabel(); }
 /* connect with retries; used for the first connection and for every reconnect */
 function glReconnect(t){ if(GL.connecting) return GL.connecting;

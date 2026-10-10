@@ -167,7 +167,9 @@ async function liveToken() {
           speechConfig: { languageCode: 'en-IN', voiceConfig: { prebuiltVoiceConfig: { voiceName: process.env.GEMINI_LIVE_VOICE || DEFAULT_LIVE_VOICE } } } },
         systemInstruction: { parts: [{ text: LIVE_SYSTEM }] },
         tools: LIVE_TOOLS,
-        inputAudioTranscription: { languageCodes: ['en-IN'] }, outputAudioTranscription: {}
+        inputAudioTranscription: { languageCodes: ['en-IN'] }, outputAudioTranscription: {},
+        // react ~0.3 s sooner after the person stops talking (measured: default waits longer for silence)
+        realtimeInputConfig: { automaticActivityDetection: { endOfSpeechSensitivity: 'END_SENSITIVITY_HIGH', silenceDurationMs: 400, prefixPaddingMs: 100 } }
       }
     })
   });
