@@ -97,6 +97,10 @@ button{cursor:pointer}
 .logo{width:44px;height:44px;border-radius:12px;background:var(--tint);color:var(--accd);display:flex;align-items:center;justify-content:center;flex:none}
 .fHead h2{margin:0;font-family:var(--disp);font-size:22px;line-height:28px;letter-spacing:-.01em}
 .fHead p{margin:2px 0 0;font-size:13px;color:var(--muted)}
+.vRight{display:flex;align-items:center;gap:10px}
+#vClose{width:36px;height:36px;border-radius:10px}
+#vClose:hover,.x:hover{color:var(--ink);border-color:var(--line2)}
+#card.open #vClose{display:none}
 .x{width:44px;height:44px;border-radius:12px;border:1px solid var(--line);background:#fff;color:var(--muted);display:flex;align-items:center;justify-content:center;flex:none}
 .tabs{display:flex;gap:4px;padding:0 28px;border-bottom:1px solid var(--line)}
 .tab{background:none;border:none;border-bottom:2px solid transparent;border-radius:0;cursor:pointer;height:46px;padding:0 14px;display:flex;align-items:center;gap:8px;font-size:14px;font-weight:500;color:var(--muted);margin-bottom:-1px}
@@ -263,7 +267,8 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
    <section id="voice" aria-label="Voice builder">
      <div class="vTop">
        <span class="cap">AI builder</span>
-       <span class="pill" id="pill"><i></i><span id="pillT">Ready</span></span>
+       <span class="vRight"><span class="pill" id="pill"><i></i><span id="pillT">Ready</span></span>
+       <button class="x" id="vClose" aria-label="Close the builder" title="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button></span>
      </div>
      <div class="stage" id="stage"><span class="halo"></span><div class="orb" id="orb" aria-hidden="true"></div></div>
      <p id="q" aria-live="polite"></p>
@@ -1153,7 +1158,7 @@ function openDemo(){ resetAll(); if(aiDown){ aiDown=false; pingAi(); } $('#overl
     setQ('Connecting to Gemini Live…');
     return glConnect().then(function(){ aiLiveLabel(); }, function(e){ toast((e&&e.message||'Gemini Live is not available')+'. Using turn-based mode.'); })
       .then(function(){ if(run===t0&&botOn) start(SCRIPT.intro); }); }); }
-$('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
+$('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#vClose').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
 $('#demoTog').onclick=function(){ var h=$('#demo').classList.toggle('hide'); this.classList.toggle('on',!h); this.setAttribute('aria-label',h?'Show demo controls':'Hide demo controls'); };
 if(params.has('demo')){ $('#demo').classList.remove('hide'); $('#demoTog').classList.add('on'); }
 $('#dAuto').onclick=function(){ autoAns=!autoAns; this.textContent='Auto-answer: '+(autoAns?'on':'off'); this.classList.toggle('on',autoAns); };
