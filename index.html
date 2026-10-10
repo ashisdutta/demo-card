@@ -73,7 +73,9 @@ button{cursor:pointer}
 @keyframes spk{0%,100%{transform:scale(.55)}45%{transform:scale(1.28)}}
 @keyframes lsn{0%,100%{transform:scale(.82)}50%{transform:scale(1)}}
 @keyframes halo{0%,100%{transform:scale(.9)}50%{transform:scale(1.1)}}
-#q{margin:0;min-height:120px;font-family:var(--disp);font-size:22px;line-height:30px;font-weight:500;letter-spacing:-.01em;text-align:center}
+/* the bot's words stream in like a chat reply: left-aligned, each word fading in from a soft blur as it is spoken */
+#q .w{opacity:0;filter:blur(4px);transition:opacity .38s ease,filter .38s ease} #q .w.on{opacity:1;filter:blur(0)}
+#q{margin:0;min-height:120px;font-family:var(--disp);font-size:21px;line-height:31px;font-weight:500;letter-spacing:-.01em;text-align:left}
 .you{border-top:1px solid var(--vline);padding-top:12px;min-height:84px;display:flex;flex-direction:column;gap:4px}
 .you p{margin:0;font-size:15px;line-height:22px}
 .you p.ph{color:var(--faint)}
@@ -465,7 +467,7 @@ var S={
  source:['Last thing here. Do you have a system prompt to upload, or should I generate one with you?','Generate it with me.'],
  company:['Let us write the system prompt. What is the company name?','Apex Dental Care.','Apex Dental Care'],
  industry:['Which domain or industry is it in?','Healthcare. It is a dental clinic.','Healthcare & Clinics'],
- agent:['What name should the sales representative use on calls? For example Maya or Arya.','Anisha.','Anisha'],
+ agent:['What name should the sales representative use on calls?','Anisha.','Anisha'],
  role:['And what is her role?','Patient coordinator and front desk specialist.','Patient Coordinator & Front-Desk Specialist'],
  goal:['What is her goal on a call?','Greet callers warmly, answer questions about cleaning, whitening and emergency visits, check insurance, and book appointments.','Greet callers warmly, answer questions about cleaning, whitening and emergency dental appointments, check insurance compatibility, and book appointments.'],
  language:['Which languages should she speak?','English, and Hindi if the caller prefers.','English and Hindi'],
@@ -473,6 +475,7 @@ var S={
  docs:['Do you have any documents about your services or prices? You can drop them here.','Yes, I am adding our price list.','apex_services_price_list.pdf'],
  guide:['Any guidelines or restrictions I should follow? This one is optional.','Never give medical advice, and transfer emergencies to a human.','Never give medical advice. Transfer emergencies to a human right away.'],
  analyze:'Give me a moment to check what I have.',
+ analyzeDocs:'Thank you. Let me read your documents and check if anything is missing.',
  missing:'Two details are missing. I have added them here.',
  docsReveal:'I have filled in everything you told me. Please verify the details on the form, and upload any documents about your services or prices in this box. Then let me know when I should generate the prompt.',
  hours:['What are your working hours?','Monday to Friday eight to six, and Saturday nine to two.','Mon to Fri 8 am to 6 pm, Sat 9 am to 2 pm'],
@@ -634,8 +637,9 @@ function extraField(x){ var d=document.createElement('div'); d.className='field'
 function finishAnalysis(){ var eg=$('#extraGrid'); EXTRA.forEach(function(x){ var f=$('#f-'+x.id); if(f) eg.appendChild(f); }); $('#extraBox').hidden=!EXTRA.length; closePop(); busy=false; }
 function missingNow(){ return EXTRA.filter(function(x){ return !x.found&&!val(x.id); }); }
 function parseMissing(out){ var seen={}; return out?(out.missing||[]).map(function(m){ return {id:'x_'+String(m.id||m.label||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,24),label:String(m.label||''),question:String(m.question||''),placeholder:String(m.placeholder||'')}; }).filter(function(x){ if(!x.label||!x.question||seen[x.id]) return false; seen[x.id]=1; return true; }).slice(0,2):DEF_EXTRA.slice(); }
-async function liveAnalyse(t){ check(t); busy=true; setOrb('work'); refresh();
-  var req=agent({kind:'analyze',fields:allFields(),docs:docData},null,35000).catch(function(){ return null; });
+function analyzeReq(){ return agent({kind:'analyze',fields:allFields(),docs:docData},null,35000).catch(function(){ return null; }); }
+async function liveAnalyse(t,pre){ check(t); busy=true; setOrb('work'); refresh();
+  var req=pre||analyzeReq();
   var names=['Company profile','Agent identity and role','Goal, tone and language','Documents','Guidelines and restrictions'];
   openPop('<div class="popHead"><span class="spin" id="anSpin"></span><div><h3 id="anTitle">Analyzing your answers</h3><p id="anSub">Checking that the prompt has everything it needs.</p></div></div><ul class="rows" id="anList">'+names.map(row).join('')+row('Looking for anything missing')+'</ul><div class="grid2" id="anFields" hidden></div><div class="popFoot" id="anFoot" hidden><button class="btn pri" id="anGo">Continue</button></div>');
   await narrate(S.analyze,t);
@@ -686,6 +690,12 @@ var GL={ws:null,on:false,inCtx:null,outCtx:null,node:null,src:null,until:0,srcs:
 var PCM16K="class P extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.p=0;this.s=0;this.n=0;this.b=[];}process(i){var c=i[0]&&i[0][0];if(c){for(var k=0;k<c.length;k++){this.s+=c[k];this.n++;this.p+=1;if(this.p>=this.r){this.p-=this.r;this.b.push(this.s/this.n);this.s=0;this.n=0;}}if(this.b.length>=1600){this.port.postMessage(new Float32Array(this.b));this.b=[];}}return true;}}registerProcessor('pcm16k',P);";
 function glNorm(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
 function glEcho(t){ var a=glNorm(t); return a.length>3&&(glNorm(GL.said).indexOf(a)>=0||glNorm(GL.lastSaid).indexOf(a)>=0); }
+/* a text value the bot itself said (an example or suggestion) but the person did not; Hindi-script answers cannot be compared, so they pass */
+function fromBotOnly(v){ var you=GL.you||''; if(/[^\x00-\x7F]/.test(you)) return false; var nv=glNorm(v), ny=glNorm(you); if(!nv||ny.indexOf(nv)>=0) return false;
+  if(nv.split(' ').some(function(w){ return w.length>2&&(' '+ny+' ').indexOf(' '+w+' ')>=0; })) return false; return glNorm((GL.lastSaid||'')+' '+(GL.said||'')).indexOf(nv)>=0; }
+/* names: if the value does not sound like what was transcribed, the bot confirms it before moving on (a word starting with the same three letters); an empty or Hindi-script transcript cannot be compared, so the model's hearing is trusted */
+function nameMismatch(id,v){ if(['name','agent','company'].indexOf(id)<0) return false; var you=GL.you||''; if(!glNorm(you)||/[^\x00-\x7F]/.test(you)) return false;
+  var yw=glNorm(you).split(' '); return !glNorm(v).split(' ').some(function(w){ return w.length<3?yw.indexOf(w)>=0:yw.some(function(x){ return x.slice(0,3)===w.slice(0,3); }); }); }
 function glSpeaking(){ return !!GL.outCtx&&GL.outCtx.currentTime<GL.until+0.3; }
 function glSend(o){ if(GL.ws&&GL.ws.readyState===1) GL.ws.send(JSON.stringify(o)); }
 function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); glArm(); }
@@ -747,18 +757,21 @@ function glMsg(m){ var sc=m.serverContent;
   if(!sc) return;
   ((sc.modelTurn&&sc.modelTurn.parts)||[]).forEach(function(p){ if(p.inlineData&&p.inlineData.data) glPlay(p.inlineData.data); });
   if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
-  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.shown=''; GL.cap=(GL.cap||0)+1; GL.newBot=false; GL.newYou=true; GL.heard=false; fadeYou(); }
+  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.capOn=0; GL.capFull=null; GL.cap=(GL.cap||0)+1; GL.newBot=false; GL.newYou=true; GL.heard=false; fadeYou(); }
     GL.said+=sc.outputTranscription.text; }
-  if(sc.interrupted){ glHushAudio(); GL.capT1=0; GL.newBot=true; GL.audioNew=true; }
+  if(sc.interrupted){ glHushAudio(); GL.capT1=0; GL.capOn=0; GL.capFull=null; GL.newBot=true; GL.audioNew=true; }
   if(sc.generationComplete){ GL.newBot=true; GL.audioNew=true; }
   if(sc.turnComplete){ GL.audioNew=true; GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); else if(GL.goAway) glRenew(); } }
 /* Google sends goAway shortly before it ends a session: switch to a fresh one between sentences */
 function glRenew(){ GL.goAway=false; var n=0, iv=setInterval(function(){ if(glSpeaking()&&++n<100) return; clearInterval(iv); if(!GL.on||!botOn) return; var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(1000,'renew'); }catch(e){} } glDropped(); },100); }
 /* the caption follows the voice: words appear at the pace the audio plays (text arrives faster than speech) */
-function capTick(){ if(!GL.on) return; var full=GL.said, n=full.length, ctx=GL.outCtx;
-  if(ctx&&sound&&GL.capT1>GL.capT0&&ctx.currentTime<GL.capT1){ n=Math.floor(Math.max(0,ctx.currentTime-GL.capT0)/(GL.capT1-GL.capT0)*full.length); var sp=full.lastIndexOf(' ',n); n=sp>0?sp:0; }
-  if(GL.shown&&full.indexOf(GL.shown)===0&&n<GL.shown.length) return; /* never step back within a sentence */
-  var show=full.slice(0,n).trim(); if(show!==GL.shown){ GL.shown=show; setQ(show); } }
+function capTick(){ if(!GL.on) return; var full=GL.said.trim(), q=$('#q'), ctx=GL.outCtx;
+  if(GL.capFull!==full){ var words=full?full.split(/\s+/):[], keep=GL.capOn||0, pos=0; GL.capFull=full; GL.capEnds=[]; GL.capAt=performance.now();
+    q.innerHTML=words.map(function(w,i){ pos=full.indexOf(w,pos)+w.length; GL.capEnds.push(pos); return '<span class="w'+(i<keep?' on':'')+'">'+esc(w)+'</span> '; }).join(''); }
+  var ends=GL.capEnds||[], k=ends.length;
+  if(ctx&&sound&&GL.capT1>GL.capT0&&ctx.currentTime<GL.capT1){ var at=Math.max(0,ctx.currentTime-GL.capT0)/(GL.capT1-GL.capT0)*full.length;
+    k=0; while(k<ends.length&&ends[k]<=at+2) k++; }
+  if(k<=(GL.capOn||0)) return; var spans=q.querySelectorAll('.w'); for(var i=GL.capOn||0;i<k&&i<spans.length;i++) spans[i].classList.add('on'); GL.capOn=k; }
 setInterval(capTick,50);
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
 /* orb, talk box and pill follow the live audio */
@@ -773,11 +786,13 @@ function glForm(){ return schema().map(function(f){ var o={id:f.id,label:f.label
 async function glTool(name,a,heard){ var t=run;
   if(name==='update_form'){
     if(!heard) return {ok:false,error:'The person has not answered yet. Ask your question and wait for their answer.'};
-    var by={}, good=[], bad=[]; schema().forEach(function(f){ by[f.id]=f; });
+    var by={}, good=[], bad=[], guessed=[], confirm=[]; schema().forEach(function(f){ by[f.id]=f; });
     (a.updates||[]).forEach(function(u){ var id=String(u&&u.id||''), v=String(u&&u.value||'').trim(), f=by[id];
-      if(!f||!v||(f.required&&/^(skip|skipped|none|n\/a|no)$/i.test(v))) bad.push(id||'(no id)'); else good.push({id:id,value:v}); });
+      if(!f||!v||(f.required&&/^(skip|skipped|none|n\/a|no)$/i.test(v))) bad.push(id||'(no id)'); else if(f.type==='text'&&(fromBotOnly(v)||(['name','agent','company'].indexOf(id)>=0&&glNorm(v).replace(/ /g,'').length<2))) guessed.push(id); else { good.push({id:id,value:v}); if(f.type==='text'&&nameMismatch(id,v)) confirm.push(v); } });
+    if(guessed.length&&!good.length) return {ok:false,error:'That value came from your own words, not from the person. Ask them again, and for a name ask them to spell it.'};
     if(!good.length) return {ok:false,rejected:bad,error:'Nothing was written. Use field ids from this form and only values the person said.',form:glForm()};
     setOrb('work'); refresh(); await applyUpdates(good,t);
+    if(confirm.length) return {ok:true,rejected:bad,form:glForm(),next:'The transcript did not clearly match, so confirm first. Say: I have noted '+confirm.join(' and ')+'. Did I get that right? If they say no, ask them to spell it and call update_form with the corrected value; if yes, '+glNext()};
     return {ok:true,rejected:bad,form:glForm(),next:glNext()}; }
   if(name==='press_button'){ var b=String(a.button||''), say=glSayAfter(b);
     if(say) glHush(); var done=await doAction(b,t);
@@ -801,14 +816,16 @@ function glSayAfter(b){
 function glNext(){ var e=schema().filter(function(f){ return !f.value; })[0];
   function ask(f){ mark(f.id,'active','Asking'); if(f.id==='phone') showPhoneChips(); return 'Next empty field: '+f.id+'. Say: '+qFor(f)+(f.options&&(f.id!=='voice'||TALK)?' (Options: '+f.options.join(' | ')+(TALK?'. The person cannot see the form, so mention the options briefly':'')+')':''); }
   if(stage==='basics'){ if(e) return ask(e); cueSource(); return 'All basic fields are filled. Say: '+S.source[0]+' Then press upload_prompt or generate_with_ai, as they choose.'; }
-  if(stage==='details'&&!analysed){ if(!e){ setTimeout(glAnalyse,60); return 'All details are filled. Say only: '+S.analyze+' Then wait for the next [App] message.'; }
+  if(stage==='details'&&!analysed){ if(!e){ setTimeout(glAnalyse,60); return 'All details are filled. Say only: '+(docData.length?S.analyzeDocs:S.analyze)+' Then wait for the next [App] message.'; }
     if(e.id==='docs') return glDocs();
     if(e.id==='guide'){ mark('guide','active','Asking'); return 'Next field: guide, optional. Say: '+S.guide[0]+' If they have none, call update_form with guide = skip.'; }
     return ask(e); }
   if(stage==='details'){ if(e) return e.id==='docs'?glDocs():ask(e); if(popOpen()) finishAnalysis(); var g=$('#genBtn'); g.classList.add('cue'); g.scrollIntoView({block:'center',behavior:'smooth'}); return 'All missing details are filled. Say: '+S.askGen[0]+' If they agree, press generate_prompt.'; }
   return ''; }
 function glDocs(){ var line=askDocs(); return 'The form is now open with their answers filled in. Next field: docs, a file upload only the person can do. Say: '+line+' Uploading is optional: if they say no, skip, or ask you to generate without uploading, call update_form with docs = skip.'; }
-async function glAnalyse(){ var t=run; try{ glHush(); await liveAnalyse(t); check(t);
+/* wait until the bot has said its line (it starts within a few seconds), so the analysis screen does not cut in */
+async function glAfterLine(t){ var n=0; while(!glSpeaking()&&n++<40){ await sleep(100); check(t); } n=0; while(glSpeaking()&&n++<120){ await sleep(100); check(t); } }
+async function glAnalyse(){ var t=run; try{ var req=analyzeReq(); await glAfterLine(t); glHush(); await liveAnalyse(t,req); check(t);
     var mi=missingNow(); if(mi.length){ var x=mi[0]; mark(x.id,'active','Asking'); glApp('The check found missing details and created these fields: '+mi.map(function(e){ return e.id+' ('+e.label+')'; }).join(', ')+'. Say: '+afterDocsNote()+(mi.length>1?'A couple of details are still missing. ':'One detail is still missing. ')+x.question); }
     else { if(popOpen()) finishAnalysis(); glApp('Nothing is missing. Begin with: '+afterDocsNote()+' '+glNext()); } }
   catch(e){ if(!(e instanceof Cancel)) console.error(e); } }
