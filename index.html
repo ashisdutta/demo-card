@@ -443,7 +443,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
   <span>Demo</span>
   <button id="dRestart">Restart</button>
   <em id="dAi">AI: checking…</em>
-  <button id="dBarge">Interruptions: off</button>
+  <button id="dBarge" class="on">Interruptions: on</button>
 </div>
 <div id="toast" role="status"></div>
 <input type="file" id="filePick" hidden multiple>
@@ -735,12 +735,12 @@ function glMicStart(){ if(!micStream||!GL.inCtx||GL.node) return; var ctx=GL.inC
 /* While the bot talks, the mic is held back until someone speaks clearly over it: 0.3 s of sound well above the
    leftover echo level (learned while the bot talks). Then the last 0.5 s and everything after go to Gemini, which stops
    the bot. Short sounds, "hmm" and remaining echo do not cut it off. */
-var BARGE={on:params.has('interrupt'),echo:0.004,run:0,pre:[]};
+var BARGE={on:!params.has('nointerrupt'),echo:0.004,run:0,pre:[]};
 function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk) return;
   if(glSpeaking()&&!GL.barge){ if(!BARGE.on) return;
     var r=0; for(var i=0;i<f.length;i++) r+=f[i]*f[i]; r=Math.sqrt(r/f.length);
     BARGE.pre.push(f); if(BARGE.pre.length>5) BARGE.pre.shift();
-    if(r>Math.max(0.02,BARGE.echo*3)){ if(++BARGE.run>=3){ GL.barge=true; var pre=BARGE.pre; BARGE.pre=[]; BARGE.run=0; pre.forEach(glPcm); } return; }
+    if(r>Math.max(0.025,BARGE.echo*3.5)){ if(++BARGE.run>=3){ GL.barge=true; var pre=BARGE.pre; BARGE.pre=[]; BARGE.run=0; pre.forEach(glPcm); } return; }
     BARGE.run=0; BARGE.echo=BARGE.echo*0.9+r*0.1; return; }
   if(!glSpeaking()){ GL.barge=false; BARGE.run=0; BARGE.pre=[]; }
   glPcm(f); }
@@ -778,7 +778,7 @@ function capTick(){ if(!GL.on) return; var full=GL.said.trim(), q=$('#q'), ctx=G
 setInterval(capTick,50);
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
 /* orb, talk box and pill follow the live audio */
-setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&!glSpeaking()); },100);
+setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&(BARGE.on||!glSpeaking())); /* with interruptions on, the mic listens while the bot talks */ },100);
 
 /* tools */
 async function glTools(calls,heard){ var out=[];

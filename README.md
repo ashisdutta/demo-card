@@ -89,9 +89,9 @@ Hidden by default. Click the small round button at the bottom right to show it, 
 
 
 - Restart: start the flow again
-- Interruptions: off by default, so the mic pauses while the bot talks (smoothest on speakers in a room). Turn on to let people talk over the bot; then the bot's voice plays through a WebRTC connection so Chrome removes its echo. `?interrupt=1` starts with it on.
+- Interruptions: on by default. People can talk over the bot to stop it; the bot's voice plays through a WebRTC connection so Chrome removes its echo, and only clear speech (about 0.3 s, louder than the leftover echo) cuts in. Turn off in the demo bar, or `?nointerrupt=1`, if a room causes false interruptions.
 
-URL options: `?mute=1` starts with sound off, `?interrupt=1` turns interruptions on, `?demo=1` shows the demo bar.
+URL options: `?mute=1` starts with sound off, `?nointerrupt=1` turns interruptions off, `?demo=1` shows the demo bar.
 
 ## Browser voice and microphone
 
