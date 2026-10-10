@@ -205,6 +205,9 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 #done{position:absolute;inset:0;background:rgba(255,255,255,.94);z-index:9;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;opacity:0;pointer-events:none;transition:opacity .35s}
 #done.on{opacity:1;pointer-events:auto}
 #done .ring{width:84px;height:84px;border-radius:50%;background:var(--oktint);display:flex;align-items:center;justify-content:center;color:var(--ok);box-shadow:0 0 0 10px rgba(11,107,92,.08)}
+#done .ring{background:#E3F6EA;color:#1F9D55;box-shadow:0 0 0 10px rgba(31,157,85,.10);transform:scale(.6);transition:transform .45s cubic-bezier(.2,1.4,.4,1)}
+#done.on .ring{transform:scale(1)}
+#done .tick{stroke-dasharray:24;stroke-dashoffset:24} #done.on .tick{animation:tick .5s .2s ease-out forwards} @keyframes tick{to{stroke-dashoffset:0}}
 #done h3{font-family:var(--disp);font-size:30px;margin:6px 0 0;letter-spacing:-.02em}
 #done p{margin:0;color:var(--muted);font-size:15px}
 
@@ -427,10 +430,9 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
    </section>
 
    <div id="done">
-     <div class="ring"><svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12l5 5L20 7"/></svg></div>
+     <div class="ring"><svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><path class="tick" d="M5 12l5 5L20 7"/></svg></div>
      <h3>Voice assistant created</h3>
      <p id="doneSub"></p>
-     <div class="chips" style="margin-top:10px"><button class="btn pri" id="doneClose">View on dashboard</button><button class="btn" id="againBtn">Create another</button></div>
    </div>
   </div>
  </div>
@@ -511,7 +513,8 @@ async function wait(ms,t){ var e=0; while(e<ms){ await sleep(40); check(t); e+=4
 function start(fn){ var t=++run; Promise.resolve().then(function(){return fn(t);}).catch(function(e){ if(!(e instanceof Cancel)) console.error(e); }).then(function(){ if(t===run){ setOrb('idle'); refresh(); } }); return t; }
 
 /* ---------- speech ---------- */
-async function say(text,t){ need(t); if(GL.on){ if(!glQuiet()) glApp('Say: '+text); } else setQ(text); } /* the bot only speaks through Gemini Live */
+/* the bot only speaks through Gemini Live; a new line waits for the current one to finish, so lines never cut each other off */
+async function say(text,t){ need(t); if(!GL.on){ setQ(text); return; } if(glQuiet()) return; var n=0; while(glSpeaking()&&n++<100){ await sleep(100); need(t); } glApp('Say: '+text); }
 async function narrate(text,t){ if(!botOn) return; try{ await say(text,t); }catch(e){ check(t); } setOrb('work'); }
 /* ---------- small UI helpers ---------- */
 function setQ(s){ $('#q').textContent=s; }
@@ -1012,7 +1015,10 @@ function save(){ run++;
   var list=loadList(), at=editId?list.map(function(x){ return x.id; }).indexOf(editId):-1;
   if(at>=0){ item.created=list[at].created; item.updated=new Date().toISOString(); list[at]=item; } else list.unshift(item);
   $('#done h3').textContent=at>=0?'Voice assistant updated':'Voice assistant created'; editId=null; saveList(list);
-  $('#doneSub').textContent=(val('name')||'Your assistant')+(val('phone')?' · '+val('phone'):'')+' is ready for calls.'; $('#done').classList.add('on'); if(botOn) start(async function(t){ await say(S.saved,t); }); if(GL.on){ GL.closeAfter=true; setTimeout(function(){ if(GL.closeAfter) glCloseWhenQuiet(); },12000); } }
+  $('#doneSub').textContent=(val('name')||'Your assistant')+(val('phone')?' · '+val('phone'):'')+' is ready for calls.'; $('#done').classList.add('on'); if(botOn) start(async function(t){ await say(S.saved,t); }); autoCloseDone(); }
+/* the success screen shows for about 1.5 s (longer only while the bot says its last sentence), then the dashboard */
+function autoCloseDone(){ var t0=Date.now(), spoke=false; (function tick(){ if(!$('#done').classList.contains('on')) return; var el=Date.now()-t0; if(glSpeaking()) spoke=true;
+  if(el<1500||(el<5500&&(glSpeaking()||(GL.on&&sound&&!spoke&&el<2500)))) return setTimeout(tick,120); closeAll(); })(); }
 
 /* ---------- controls ---------- */
 function clearStage(){ var ids=stage==='basics'?['name','phone','voice']:(stage==='details'?['company','industry','agent','role','goal','language','tone','guide','hours','handoff']:[]);
@@ -1034,7 +1040,7 @@ function openDemo(){ resetAll(); if(aiDown){ aiDown=false; pingAi(); } $('#overl
   var t0=run, ask=setTimeout(function(){ if(run===t0) setQ('Please allow the microphone so I can hear you.'); },400);
   if(live) glPrime(); /* audio needs this click */
   warmMic().then(function(){ clearTimeout(ask); if(run===t0&&botOn) start(SCRIPT.intro); }); }
-$('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#vClose').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
+$('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#vClose').onclick=closeAll; $('#dRestart').onclick=openDemo;
 $('#demoTog').onclick=function(){ var h=$('#demo').classList.toggle('hide'); this.classList.toggle('on',!h); this.setAttribute('aria-label',h?'Show demo controls':'Hide demo controls'); };
 if(params.has('demo')){ $('#demo').classList.remove('hide'); $('#demoTog').classList.add('on'); }
 $('#dBarge').onclick=function(){ BARGE.on=!BARGE.on; if(BARGE.on&&GL.outCtx) glLoopback(); this.textContent='Interruptions: '+(BARGE.on?'on':'off'); this.classList.toggle('on',BARGE.on); };
