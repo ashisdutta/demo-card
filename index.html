@@ -84,6 +84,7 @@ button{cursor:pointer}
 .hint{margin:0;font-size:13px;line-height:18px;color:var(--muted);text-align:center}
 #card:not(.open) .ctrls,#card:not(.open) #hint{display:none}
 #card.talking .ctrls{display:grid}
+.liveErr{display:flex;flex-direction:column;gap:10px;align-items:center;text-align:center} .liveErr p{margin:0;font-size:14px;line-height:20px;color:var(--muted)}
 .prog{display:flex;flex-direction:column;gap:8px} .prog span{font-size:13px;color:var(--muted);text-align:center}
 .pbar{height:6px;border-radius:3px;background:var(--vline);overflow:hidden} .pbar i{display:block;height:100%;width:0;background:var(--acc);transition:width .4s}
 
@@ -110,7 +111,11 @@ button{cursor:pointer}
 .tag{height:20px;padding:0 7px;border-radius:6px;background:#EFEEF5;color:#3F3D52;font-family:var(--mono);font-size:11px;display:inline-flex;align-items:center;font-weight:500}
 .tag.acc{background:var(--tint);color:var(--accd)} .tag.ok{background:var(--oktint);color:var(--ok)} .tag.warn{background:var(--warntint);color:var(--warn)}
 #body{flex:1;min-height:0;overflow-y:auto;padding:22px 28px;scroll-behavior:smooth}
-.st{display:flex;flex-direction:column;gap:18px}
+.st{display:flex;flex-direction:column;gap:18px;scroll-margin-top:8px}
+#body .st+.st{margin-top:30px}
+.secT{display:flex;align-items:center;gap:10px;font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.secT b{width:24px;height:24px;border-radius:50%;background:var(--tint);color:var(--accd);display:grid;place-items:center;font-family:var(--disp);font-size:12px;letter-spacing:0}
+.fFoot .msg.muted{color:var(--muted)}
 .box{border:1px solid var(--line);border-radius:14px;padding:20px;display:flex;flex-direction:column;gap:16px}
 .box h3{margin:0;font-size:13px;line-height:18px;font-weight:600;letter-spacing:.05em;text-transform:uppercase}
 .box .sub{margin:-12px 0 0;font-size:13px;color:var(--muted)}
@@ -181,7 +186,6 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 
 /* result */
 .rowBetween{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap}
-.stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px}
 .stat{padding:10px 12px;border-radius:10px;background:var(--soft);display:flex;flex-direction:column;gap:2px}
 .stat span{font-family:var(--mono);font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 .stat b{font-family:var(--mono);font-size:15px;font-weight:500}
@@ -274,6 +278,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
      <p id="q" aria-live="polite"></p>
      <div class="you"><span class="cap">You</span><p id="you" class="ph">Your answer shows up here as you speak.</p></div>
      <div class="prog" id="prog" hidden><div class="pbar"><i id="progBar"></i></div><span id="progT"></span></div>
+     <div class="liveErr" id="liveErr" hidden><p>Your answers so far are kept. Please try again in a moment.</p><button class="btn pri" id="liveRetry">Try again</button></div>
      <div class="talk" id="talk" hidden>
        <button class="mic" id="micBtn" aria-label="Microphone on or off"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="3" width="6" height="11" rx="3"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3"/></svg></button>
        <input class="ctl" id="sayBox" aria-label="Type your answer" placeholder="Type your answer" autocomplete="off">
@@ -303,15 +308,11 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
         </div>
         <button class="x" id="closeBtn" aria-label="Close"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
       </div>
-      <div class="tabs">
-        <button class="tab" id="tab1">1. Basics</button>
-        <button class="tab" id="tab2">2. System prompt <span class="tag acc" id="tab2tag">Required</span></button>
-        <button class="tab" id="tab3">3. Prompt and analytics</button>
-      </div>
 
       <div id="body">
         <!-- CARD 1 -->
         <div class="st" id="st-basics">
+          <div class="secT"><b>1</b>Basics</div>
           <div class="box">
             <h3>Assistant identity and contact line</h3>
             <div class="grid2">
@@ -344,6 +345,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 
         <!-- CARD 2 : upload -->
         <div class="st" id="st-upload" hidden>
+          <div class="secT"><b>2</b>System prompt</div>
           <div class="box">
             <h3>Upload system prompt</h3>
             <div class="field" id="f-up"><div class="lab"><span>System prompt file <i>*</i></span><span class="badge"></span></div>
@@ -357,6 +359,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 
         <!-- CARD 2 : generate -->
         <div class="st" id="st-details" hidden>
+          <div class="secT"><b>2</b>System prompt</div>
           <div class="box">
             <h3>Business and agent details</h3>
             <div class="grid2">
@@ -373,13 +376,13 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
               <div class="field" id="f-tone"><div class="lab"><label for="i-tone">Agent tone <i>*</i></label><span class="badge"></span></div>
                 <select class="ctl" id="i-tone"><option value="">Choose a tone</option><option>Warm &amp; Welcoming</option><option>Professional</option><option>Energetic</option><option>Calm</option></select></div>
             </div>
+            <div class="field" id="f-guide"><div class="lab"><label for="i-guide">Guidelines or restrictions <small>(optional)</small></label><span class="badge"></span></div><textarea class="ctl" id="i-guide" rows="2" placeholder="Anything the agent must always or never do"></textarea></div>
             <div class="field" id="f-docs"><div class="lab"><span>Documents <small>(product items, price lists, FAQs)</small></span><span class="badge"></span></div>
               <button class="drop" id="docDrop">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#5A5870" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M12 16V4M7 9l5-5 5 5M5 20h14"/></svg>
                 <span><b>Upload company documents</b><small>PDF, DOCX or TXT · the agent answers from these</small></span>
               </button>
               <div class="files" id="docFiles"></div></div>
-            <div class="field" id="f-guide"><div class="lab"><label for="i-guide">Guidelines or restrictions <small>(optional)</small></label><span class="badge"></span></div><textarea class="ctl" id="i-guide" rows="2" placeholder="Anything the agent must always or never do"></textarea></div>
           </div>
           <div class="box" id="extraBox" hidden>
             <div class="rowBetween"><h3>Additional details</h3><span class="tag acc">Added by AI after analysis</span></div>
@@ -390,6 +393,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
 
         <!-- CARD 3 -->
         <div class="st" id="st-result" hidden>
+          <div class="secT"><b>3</b>Prompt and analytics</div>
           <div class="box">
             <div class="rowBetween">
               <div class="chips"><h3>Generated prompt</h3><span class="tag acc" id="resMode">Standard</span><span class="tag ok">Validated</span><span class="tag ok">Simulated</span></div>
@@ -398,12 +402,6 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
                 <button class="btn" id="regenBtn">Regenerate</button>
                 <button class="btn" id="dlBtn" aria-label="Download prompt"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 4v12M7 11l5 5 5-5M5 20h14"/></svg></button>
               </div>
-            </div>
-            <div class="stats">
-              <div class="stat"><span>Words</span><b id="sWords">0</b></div>
-              <div class="stat"><span>Tokens</span><b id="sTok">0</b></div>
-              <div class="stat"><span>Example calls</span><b id="sCalls">3 / 3</b></div>
-              <div class="stat"><span>Score</span><b id="sScore">[SCORE]</b></div>
             </div>
             <textarea class="ctl" id="prompt" readonly aria-label="Generated prompt" placeholder="No prompt yet. Generate or upload one in step 2 and it appears here."></textarea>
           </div>
@@ -550,7 +548,7 @@ function speak(text,t,asUser){ if(sound&&gemVoice&&!asUser) return gemSpeak(text
     }catch(e){ to=setTimeout(function(){fin(true);},est); }
   } else { to=setTimeout(function(){fin(true);},est); }
 });}
-async function say(text,t){ need(t); if(GL.on){ if(!glQuiet()) glApp('Say: '+text); return; } setQ(text); fadeYou(); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
+async function say(text,t){ need(t); if(live){ if(GL.on){ if(!glQuiet()) glApp('Say: '+text); } else setQ(text); return; } setQ(text); fadeYou(); setOrb('speak'); refresh(); var ok=await speak(text,t,false); check(t); if(!ok||!botOn) throw new Cancel(); setOrb('idle'); refresh(); }
 async function narrate(text,t){ if(!botOn) return; try{ await say(text,t); }catch(e){ check(t); } setOrb('work'); }
 async function hear(text,t){ need(t); setOrb('listen'); refresh(); var sp=speakAns?speak(text,t,true):null; var el=$('#you'); el.classList.remove('ph');
   for(var i=1;i<=text.length;i++){ el.textContent=text.slice(0,i); await sleep(24); need(t); }
@@ -567,6 +565,8 @@ function refresh(){ if(TALK) progress(); var p=$('#pill'),tx='Paused',c='';
   if(busy){ tx='Processing'; c='live'; }
   if(botOn){ if(orbState==='speak'){tx='Speaking';c='speak';} else if(orbState==='listen'){tx='Listening';c='live';} else if(busy){tx='Processing';c='live';} else if(orbState==='work'){tx='Thinking';c='live';} else {tx='Waiting for you';c='live';} }
   else if(!busy){ tx=stage==='intro'?'Ready':'Paused'; }
+  if(GL.note&&botOn) { tx=GL.note; c='live'; }
+  if(!$('#liveErr').hidden){ tx='Not connected'; c=''; }
   p.className='pill '+c; $('#pillT').textContent=tx;
   $('#playBtn').innerHTML=botOn?'<svg viewBox="0 0 24 24" fill="currentColor"><rect x="6" y="5" width="4" height="14" rx="1"/><rect x="14" y="5" width="4" height="14" rx="1"/></svg>Pause':'<svg viewBox="0 0 24 24" fill="currentColor"><path d="M8 5v14l11-7z"/></svg>Play';
   $('#playBtn').className='btn'+(botOn?'':' pri');
@@ -587,25 +587,30 @@ addEventListener('resize',fit); fit();
 (function(){ var o=$('#orb'),h=''; for(var r=0;r<11;r++)for(var c=0;c<11;c++){ var d=Math.sqrt((r-5)*(r-5)+(c-5)*(c-5)); var s=d>5.4?0:Math.max(2,Math.round(20-3.4*d)); h+='<span><b style="width:'+s+'px;height:'+s+'px;animation-delay:'+(d*0.11).toFixed(2)+'s"></b></span>'; } o.innerHTML=h;
   var ps=$('#i-phone'); PHONES.forEach(function(p){ var op=document.createElement('option'); op.value=p[0]; op.textContent=p[0]+' ('+p[1]+')'; ps.appendChild(op); });
 })();
-function showPhoneChips(){ var w=$('#phoneChips'); w.innerHTML=''; PHONES.forEach(function(p){ var b=document.createElement('button'); b.className='chip'; b.innerHTML='<span class="mono">'+p[0]+'</span><span>'+p[1]+'</span>'+(p[2]?'<span class="tag acc">Recommended</span>':''); b.onclick=function(){ $('#i-phone').value=p[0]; syncChips(); }; w.appendChild(b); }); $('#phoneSug').hidden=false; syncChips(); }
+function showPhoneChips(){ var w=$('#phoneChips'); w.innerHTML=''; PHONES.forEach(function(p){ var b=document.createElement('button'); b.className='chip'; b.innerHTML='<span class="mono">'+p[0]+'</span><span>'+p[1]+'</span>'+(p[2]?'<span class="tag acc">Recommended</span>':''); b.onclick=function(){ $('#i-phone').value=p[0]; syncChips(); markDirty(); }; w.appendChild(b); }); $('#phoneSug').hidden=false; syncChips(); }
 function syncChips(){ var v=$('#i-phone').value; [].forEach.call($('#phoneChips').children,function(b,i){ b.classList.toggle('on',PHONES[i][0]===v); }); }
 $('#i-phone').onchange=syncChips;
 function setMode(m){ mode=m; $('#m-standard').classList.toggle('on',m==='standard'); $('#m-premium').classList.toggle('on',m==='premium'); $('#modeNote').textContent=m?MODE_NOTE[m]:'Pick a mode to see its voices.';
   var s=$('#i-voice'); s.innerHTML='<option value="">'+(m?'Choose a voice':'Choose a mode first')+'</option>'; if(m) VOICES[m].forEach(function(v){ var o=document.createElement('option'); o.textContent=v[0]; s.appendChild(o); }); asked.voice=false; mark('voice',null); }
-$('#m-standard').onclick=function(){ setMode('standard'); }; $('#m-premium').onclick=function(){ setMode('premium'); };
+$('#m-standard').onclick=function(){ setMode('standard'); markDirty(); }; $('#m-premium').onclick=function(){ setMode('premium'); markDirty(); };
 
 /* ---------- stages ---------- */
-function setStage(s){ stage=s; ['basics','upload','details','result'].forEach(function(k){ $('#st-'+k).hidden=(k!==s); });
-  var n=s==='basics'?1:(s==='result'?3:2); [1,2,3].forEach(function(i){ var tb=$('#tab'+i); tb.classList.toggle('on',i===n); tb.classList.toggle('done',i<n); });
-  var hasP=!!promptText; $('#tab2tag').textContent=hasP?'Attached':'Required'; $('#tab2tag').className='tag '+(hasP?'ok':'acc');
-  $('#introBtns').hidden=(s!=='intro'); $('#body').scrollTop=0; footer(); refresh(); }
+/* one scrolling form: Basics, then the chosen system prompt section, then the result once a prompt exists */
+function showSections(){ $('#st-upload').hidden=source!=='upload'; $('#st-details').hidden=source!=='gen'; $('#st-result').hidden=!promptText; }
+function setStage(s){ var prev=stage; stage=s; showSections(); $('#introBtns').hidden=(s!=='intro');
+  if(s==='basics'||s==='intro') $('#body').scrollTop=0; else if(s!==prev){ var el=$('#st-'+s); setTimeout(function(){ if(!el.hidden) el.scrollIntoView({block:'start',behavior:'smooth'}); },80); }
+  footer(); refresh(); }
 function footer(){ var m=$('#footMsg'),a=$('#footActs'); a.innerHTML=''; m.className='msg';
   function add(label,cls,id,fn){ var b=document.createElement('button'); b.className='btn '+(cls||''); b.textContent=label; if(id) b.id=id; b.onclick=fn; a.appendChild(b); return b; }
-  if(stage==='basics'){ m.textContent='Choose how to add the system prompt to continue.'; add('Cancel','',null,closeAll); }
-  else if(stage==='details'){ m.textContent='Fill the details, then generate the prompt.'; add('Back','',null,function(){ go('basics'); }); }
-  else if(stage==='upload'){ m.textContent=upFile?'File attached.':'Attach a system prompt file to continue.'; if(upFile) m.className='msg ok'; add('Back','',null,function(){ go('basics'); }); var b=add('Validate and continue','pri','upGo',function(){ runFlow('upload'); }); b.disabled=!upFile; }
-  else if(stage==='result'){ if(promptText){ m.textContent='System prompt attached · '+$('#anRows').children.length+' analytics fields ready'; m.className='msg ok'; } else m.textContent='No prompt yet. Generate or upload one in step 2.'; add('Back','',null,function(){ go(source==='upload'?'upload':'details'); }); add('Save Voice Assistant','pri','saveBtn',save); }
-}
+  if(editId){ m.textContent=dirty?'Unsaved changes':'No changes yet'; if(!dirty) m.className='msg muted'; add('Cancel','',null,cancelEdit); add('Save changes','pri','saveBtn',save).disabled=!dirty; return; }
+  add('Cancel','',null,closeAll);
+  if(promptText){ m.textContent='System prompt attached · '+$('#anRows').children.length+' analytics fields ready'; m.className='msg ok'; add('Save Voice Assistant','pri','saveBtn',save); return; }
+  if(source==='upload'){ m.textContent=upFile?'File attached.':'Attach a system prompt file to continue.'; if(upFile) m.className='msg ok'; add('Validate and continue','pri','upGo',function(){ runFlow('upload'); }).disabled=!upFile; return; }
+  m.textContent=source==='gen'?'Fill the details, then generate the prompt.':'Choose how to add the system prompt to continue.'; }
+/* editing a saved assistant: nothing is saved until Save changes is pressed */
+var dirty=false;
+function markDirty(){ if(editId&&!dirty){ dirty=true; footer(); } }
+function cancelEdit(){ if(dirty&&!confirm('Discard your unsaved changes?')) return; closeAll(); }
 function go(s){ run++; stopSpeech(); busy=false; closePop(); setStage(s); if(botOn) start(SCRIPT[s]); }
 function openForm(){ $('#card').classList.add('open'); }
 
@@ -649,69 +654,21 @@ async function rawAgent(payload,ms){ var ctl=new AbortController(), to=setTimeou
   catch(e){ throw new LiveFail('The AI service could not be reached'); } finally{ clearTimeout(to); }
   if(!r.ok) throw new LiveFail((j&&j.error)||'The AI service returned an error');
   return j; }
-async function agent(payload,t,ms){ var j;
-  if(aiDown&&Date.now()-aiDownAt>20000) aiDown=false; /* quota errors clear within a minute, so try Gemini again */
-  if(payload.kind==='turn'){
-    if(!aiDown){ try{ j=await rawAgent(payload,ms); aiStatus(true); }catch(e){ if(!(e instanceof LiveFail)) throw e; aiDown=true; aiDownAt=Date.now(); aiStatus(false,e.message); toast(e.message+'. I will keep going and write down exactly what you say.'); } }
-    if(!j) j=localTurn(payload); }
-  else { j=await rawAgent(payload,ms); if(payload.kind!=='tts'){ aiDown=false; aiStatus(true); } }
-  if(t!=null) check(t); return j; }
-/* offline note-taker: used only when Gemini cannot be reached. It never invents a value. */
+async function agent(payload,t,ms){ var j=await rawAgent(payload,ms); if(payload.kind!=='tts') aiStatus(true); if(t!=null) check(t); return j; }
 function qFor(f){ if(f.id==='voice'&&mode) return 'Which voice would you like? I recommend '+VOICES[mode][0][0].split(' (')[0]+'.'; if(S[f.id]&&S[f.id][0]) return S[f.id][0]; var x=EXTRA.filter(function(e){ return e.id===f.id; })[0]; if(x) return x.question; return 'What about the '+f.label.toLowerCase()+'?'+(f.options?' The options are '+f.options.join(', ')+'.':''); }
-function localTurn(p){ var u=String(p.user||''), fs=p.fields||[], out={updates:[],say:'',focus:'',action:'none',add_analytics:[]}, no=/\b(no|nope|skip|none|not now|nothing)\b/i.test(u), yes=!/\b(not|no|don't|dont)\b/i.test(u)&&/\b(yes|yeah|yep|ok|okay|sure|go ahead|please do|do it|fine)\b/i.test(u);
-  if(p.stage==='intro'){ if(/\b(manual|manually|myself|by myself|on my own|fill it in|fill this in|fill the form|type it|let me|i will do it|i'll do it|i will build|i'll build)\b/i.test(u)) out.action='build_manually'; else if(/\b(with (you|u)|together|for me|you can|(you|u) do it|you build|help me|go ahead|please do|do it|build|bill|create|make|auto|automatic|yes|yeah|yep|sure|okay|ok|bot|ai)\b/i.test(u)) out.action='build_with_ai'; else out.say='Would you like me to build it with you, or would you rather fill it in yourself?'; return out; }
-  if(p.stage==='result'){ if(/save|yes|done/i.test(u)) out.action='save'; else out.say='You can add fields with the Add Field button. Shall I save it?'; return out; }
-  if(p.stage==='upload'){ if(yes||/valid|test/i.test(u)) out.action='validate'; else out.say='Shall I validate and test it?'; return out; }
-  var empty=fs.filter(function(f){ return !f.value; }), cur=empty.filter(function(f){ return f.id===p.focus; })[0]||empty[0];
-  if(!cur){ if(p.stage==='basics'){ if(/upload/i.test(u)) out.action='upload_prompt'; else if(/generat|with me|with you|yes|\bai\b/i.test(u)) out.action='generate_with_ai'; else out.say=S.source[0]; }
-    else if(p.stage==='extra'){ if(yes||/generat/i.test(u)) out.action='generate_prompt'; else out.say=S.askGen[0]; }
-    else out.say='Let me check what I have.'; return out; }
-  var v='';
-  if(/\b(give me a (sec|second|minute|moment)|one (sec|second|moment|minute)|let me think|not sure|i don'?t know|no idea)\b/i.test(u)&&u.split(/\s+/).length<9||/^\W*(hmm+\W*)?(wait|hold on)\W*$/i.test(u)){ out.say='Sure, take your time. '+qFor(cur); out.focus=cur.id; return out; }
-  if(/\?\s*$/.test(u)||/^\s*(what|why|how|who|which|where|when|can you|could you|do you|does|is it|is that|what's|whats|sorry|pardon|repeat)\b/i.test(u)){ out.say='Sorry, I cannot answer questions right now because the AI is offline. '+qFor(cur); out.focus=cur.id; return out; }
-  if(cur.type==='file'){ if(/\[I uploaded/.test(u)) cur.value='done'; else if(no) v='skip'; else { out.say='Click the upload box to add a file, or say skip.'; out.focus=cur.id; return out; } }
-  else if(cur.options){ var words=u.toLowerCase().split(/[^a-z0-9]+/).filter(function(w){ return w.length>2&&!/^(the|and|use|one|that|line|voice|mode|please|yes)$/.test(w); });
-    var score=cur.options.map(function(o){ return words.filter(function(w){ return o.toLowerCase().indexOf(w)>=0; }).length; }), top=Math.max.apply(null,score.concat(0));
-    var hit=top?cur.options.filter(function(o,i){ return score[i]===top; }):[];
-    if(hit.length!==1&&/first/i.test(u)) hit=[cur.options[0]]; if(hit.length!==1&&/second/i.test(u)&&cur.options[1]) hit=[cur.options[1]]; if(hit.length!==1&&/third|last/i.test(u)) hit=[cur.options[cur.options.length-1]];
-    if(hit.length!==1&&yes) hit=[cur.options[0]];
-    if(hit.length!==1){ out.say='Please pick one: '+cur.options.join(', ')+'.'; out.focus=cur.id; return out; } v=hit[0]; }
-  else if(!cur.required&&no) v='skip';
-  else if(/^\W*(yes|yeah|yep|no|nope|ok|okay|sure|fine|go ahead|hmm+|um+|uh+|skip|none)\b[\w\s,]{0,12}\W*$/i.test(u)){ out.say=(no?'I need this one to build the prompt. ':'')+qFor(cur); out.focus=cur.id; return out; }
-  else { v=u.replace(/^(call it|name it|it is called|it is|it's|its|the name is|we are|this is|she is|he is|her role is|to)\s+/i,'').replace(/[.\s]+$/,''); v=v.charAt(0).toUpperCase()+v.slice(1); }
-  if(v){ out.updates.push({id:cur.id,value:v}); cur.value=v; }
-  var next=fs.filter(function(f){ return !f.value; })[0];
-  if(next){ out.say='Got it. '+qFor(next); out.focus=next.id; }
-  else out.say=p.stage==='basics'?S.source[0]:(p.stage==='extra'?S.askGen[0]:'Let me check what I have.');
-  return out; }
-/* microphone (browser speech recognition) with a typed fallback */
-var SR=window.SpeechRecognition||window.webkitSpeechRecognition, rec=null, micOk=!!SR, micOn=true, waitRes=null;
-function micNote(){ var on=micOk&&micOn&&!!waitRes; $('#micBtn').classList.toggle('on',on); $('#sayBox').placeholder=micOk?(micOn?'Listening… or type here':'Mic is off. Type your answer'):'Type your answer'; }
-function startRec(){ if(!micOk||!micOn||rec) { micNote(); return; }
-  try{ var r=new SR(); rec=r; r.lang='en-IN'; r.interimResults=true; r.continuous=true; r.maxAlternatives=1;
-    r.onresult=function(e){ var txt='',fin=false; for(var i=0;i<e.results.length;i++){ txt+=e.results[i][0].transcript; if(e.results[i].isFinal) fin=true; } if(txt) setYou(txt); if(fin&&waitRes) waitRes(txt); };
-    r.onerror=function(e){ if(e.error==='audio-capture'&&micStream){ releaseMic(); return; } if(e.error==='not-allowed'||e.error==='service-not-allowed'||e.error==='audio-capture'){ micOk=false; micNote(); toast('Microphone is blocked. Type your answer instead.'); } };
-    r.onend=function(){ if(rec===r) rec=null; if(waitRes&&micOk&&micOn) setTimeout(function(){ if(waitRes&&!rec) startRec(); },300); };
-    r.start(); }catch(e){ rec=null; }
-  micNote(); }
+var micOk=true, micOn=true; /* the mic is streamed to Gemini Live; it can be muted with the mic button */
+function micNote(){ var on=micOk&&micOn&&GL.on; $('#micBtn').classList.toggle('on',on); $('#sayBox').placeholder=micOk?(micOn?'Listening… or type here':'Mic is off. Type your answer'):'Type your answer'; }
 /* Ask for the microphone once, on the Create Assistant click, and keep it open while the builder is open.
    Otherwise each speech recognition start can show the permission prompt again
    (one-time "Allow this time" grants, Safari, http pages that are not localhost). */
 var micStream=null;
 function warmMic(){ if(!live||!micOk||!micOn||micStream||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return Promise.resolve();
-  return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}).then(function(st){ micStream=st; if(/Android/i.test(navigator.userAgent)) releaseMic(); /* Android cannot share the mic with speech recognition */ })
+  return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}).then(function(st){ micStream=st; })
     .catch(function(e){ if(e&&/NotAllowed|Security|NotFound/.test(e.name)){ micOk=false; micNote(); toast('Microphone is blocked. Type your answers, or allow the mic from the address bar and press Restart.'); } }); }
 function releaseMic(){ if(micStream){ micStream.getTracks().forEach(function(k){ k.stop(); }); micStream=null; } }
-function stopRec(){ if(rec){ var r=rec; rec=null; r.onend=null; r.onresult=null; try{ r.abort(); }catch(e){} } }
-function listen(t){ need(t); setOrb('listen'); refresh(); $('#talk').hidden=false; $('#sayBox').value='';
-  return new Promise(function(res,rej){ var done=false;
-    function fin(v,err){ if(done) return; done=true; clearInterval(iv); waitRes=null; stopRec(); $('#talk').hidden=true; micNote(); if(err) rej(err); else res(v); }
-    waitRes=function(text){ text=String(text||'').trim(); if(!text) return; setYou(text); fin(text); };
-    var iv=setInterval(function(){ if(t!==run||!botOn) fin(null,new Cancel()); },80);
-    setTimeout(function(){ if(!done) startRec(); },300); }); }
-function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&GL.on){ $('#sayBox').value=''; GL.heard=true; GL.newYou=false; GL.overBot=false; GL.you=v; setYou(v); glSend({realtimeInput:{text:v}}); return; } if(v&&waitRes){ $('#sayBox').value=''; waitRes(v); } }
+function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&GL.on){ $('#sayBox').value=''; GL.heard=true; GL.newYou=false; GL.overBot=false; GL.you=v; setYou(v); glSend({realtimeInput:{text:v}}); glArm(); return; } }
 $('#sendBtn').onclick=sendTyped; $('#sayBox').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); sendTyped(); } };
-$('#micBtn').onclick=function(){ if(!micOk){ toast('Speech recognition is not available in this browser. Type your answer.'); return; } micOn=!micOn; if(micOn){ if(waitRes) startRec(); } else stopRec(); micNote(); };
+$('#micBtn').onclick=function(){ if(!micOk){ toast('The microphone is blocked. Type your answers, or allow the mic from the address bar.'); return; } micOn=!micOn; micNote(); };
 
 /* what the agent sees */
 function optsOf(id){ return [].map.call($('#i-'+id).options,function(o){ return o.value?o.textContent:''; }).filter(Boolean); }
@@ -750,7 +707,6 @@ async function applyUpdates(us,t){ for(var k=0;k<us.length;k++){ var id=String(u
 function extraField(x){ var d=document.createElement('div'); d.className='field'; d.id='f-'+x.id; d.innerHTML='<div class="lab"><label><i>*</i></label><span class="badge"></span></div><input class="ctl">';
   var l=d.querySelector('label'); l.htmlFor='i-'+x.id; l.insertBefore(document.createTextNode(x.label+' '),l.firstChild); var i=d.querySelector('input'); i.id='i-'+x.id; i.placeholder=x.placeholder||''; if(x.found){ i.value=x.value; d.classList.add('is-done'); d.querySelector('.badge').textContent='From documents'; } return d; }
 function finishAnalysis(){ var eg=$('#extraGrid'); EXTRA.forEach(function(x){ var f=$('#f-'+x.id); if(f) eg.appendChild(f); }); $('#extraBox').hidden=!EXTRA.length; closePop(); busy=false; }
-function parseFound(out){ var seen={}; return out?(out.found||[]).map(function(m){ return {id:'x_'+String(m.id||m.label||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,24),label:String(m.label||''),question:'',placeholder:'',value:String(m.value||''),found:true}; }).filter(function(x){ if(!x.label||!x.value||seen[x.id]) return false; seen[x.id]=1; return true; }).slice(0,4):[]; }
 function missingNow(){ return EXTRA.filter(function(x){ return !x.found&&!val(x.id); }); }
 function parseMissing(out){ var seen={}; return out?(out.missing||[]).map(function(m){ return {id:'x_'+String(m.id||m.label||'').toLowerCase().replace(/[^a-z0-9]+/g,'_').slice(0,24),label:String(m.label||''),question:String(m.question||''),placeholder:String(m.placeholder||'')}; }).filter(function(x){ if(!x.label||!x.question||seen[x.id]) return false; seen[x.id]=1; return true; }).slice(0,2):DEF_EXTRA.slice(); }
 async function liveAnalyse(t){ check(t); busy=true; setOrb('work'); refresh();
@@ -761,16 +717,14 @@ async function liveAnalyse(t){ check(t); busy=true; setOrb('work'); refresh();
   var list=$('#anList'), lis=list.children;
   for(var i=0;i<5;i++){ setRow(lis[i],'run','Checking'); await wait(480,t); setRow(lis[i],'ok','OK',i===3?(docData.length?docData.length+' read':(docs.length?'File names only':'None added (optional)')):(i===4?(val('guide')?'':'None added (optional)'):'')); }
   setRow(lis[5],'run','Checking'); var out=await req; check(t);
-  var missing=parseMissing(out), found=parseFound(out); docFacts=out&&out.facts?String(out.facts):''; EXTRA=missing.concat(found);
+  var missing=parseMissing(out); docFacts=out&&out.facts?String(out.facts):''; EXTRA=missing; /* details found in documents are not shown; they reach the prompt through docFacts */
   list.removeChild(lis[5]);
-  found.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'ok','From documents',x.value); });
-  if(!missing.length){ var eg0=$('#extraGrid'); found.forEach(function(x){ eg0.appendChild(extraField(x)); }); $('#extraBox').hidden=!found.length; $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(900,t); analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); return; }
-  var g=$('#anFields'); missing.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'miss','Missing',''); g.appendChild(extraField(x)); }); found.forEach(function(x){ g.appendChild(extraField(x)); });
+  if(!missing.length){ $('#anSpin').className='spin done'; $('#anTitle').textContent='Everything is here'; await wait(900,t); analysed=true; closePop(); busy=false; setOrb('idle'); refresh(); return; }
+  var g=$('#anFields'); missing.forEach(function(x){ var tmp=document.createElement('ul'); tmp.innerHTML=row(esc(x.label)); var li=tmp.firstChild; list.appendChild(li); setRow(li,'miss','Missing',''); g.appendChild(extraField(x)); });
   $('#anTitle').textContent=missing.length>1?'A couple of details are missing':'One detail is missing'; $('#anSub').textContent='I created '+(missing.length>1?'these inputs':'this input')+' for you. Answer out loud or type.'; $('#anSpin').hidden=true; g.hidden=false; $('#anFoot').hidden=false;
   $('#anGo').onclick=function(){ finishAnalysis(); if(botOn) start(SCRIPT.details); };
   analysed=true; busy=false; setOrb('idle'); refresh(); }
-function afterDocsNote(){ var f=EXTRA.filter(function(x){ return x.found; }); return docData.length?'I read your documents'+(f.length?' and filled in '+f.map(function(x){ return x.label.toLowerCase(); }).join(', ').replace(/, ([^,]*)$/,' and $1')+' from them':'')+'. ':''; }
-async function runAnalysis(t){ await liveAnalyse(t); var mi=missingNow(); if(mi.length) return {line:afterDocsNote()+(mi.length>1?'A couple of details are still missing. ':'One detail is still missing. ')+mi[0].question,f:mi[0].id}; if(popOpen()) finishAnalysis(); var o=detailsOpener(); if(o&&!o.f) o.line=afterDocsNote()+o.line; return o||{line:S.askGen[0],f:null}; }
+function afterDocsNote(){ return docData.length?'I read your documents. ':''; }
 
 async function doAction(a,t){
   if(stage==='intro'){ if(a==='build_with_ai'){ await press($('#introBot'),t); chooseBot(); return true; } if(a==='build_manually'){ await press($('#introManual'),t); chooseManual(); return true; } return false; }
@@ -779,23 +733,6 @@ async function doAction(a,t){
   if(stage==='upload'&&a==='validate'&&upFile){ await press($('#upGo'),t); runFlow('upload'); return true; }
   if(stage==='result'&&a==='save'){ await press($('#saveBtn'),t); save(); return true; }
   return false; }
-async function converse(t,opener,focus){ var line=opener,f=focus;
-  for(;;){
-    if(f&&$('#f-'+f)) mark(f,'active','Asking');
-    await say(line,t);
-    if(f&&$('#f-'+f)) mark(f,'active','Listening');
-    var user=await listen(t);
-    setOrb('work'); refresh();
-    var r=await agent({kind:'turn',stage:stage==='details'&&analysed?'extra':stage,fields:schema(),last_bot:line,focus:f||'',user:user},t);
-    if(f&&$('#f-'+f)&&!$('#f-'+f).classList.contains('is-done')) mark(f,null);
-    await applyUpdates(r.updates||[],t);
-    if(stage==='result') (r.add_analytics||[]).forEach(function(a){ var ty=['String','Number','Boolean','Date'].filter(function(x){ return x.toLowerCase()===String(a.type).toLowerCase(); })[0]||'String'; addAn(a.name,ty,a.description).scrollIntoView({block:'center',behavior:'smooth'}); });
-    if(await doAction(r.action,t)) return;
-    if(stage==='details'){
-      if(!analysed&&detailsDone()){ var o=await runAnalysis(t); line=o.line; f=o.f; if(!f) $('#genBtn').classList.add('cue'); continue; }
-      if(analysed&&extrasDone()&&(popOpen()||EXTRA.some(function(x){ return x.id===f; }))){ await wait(600,t); if(popOpen()) finishAnalysis(); var od=detailsOpener(); line=od.line; f=od.f; if(!f){ var g=$('#genBtn'); g.classList.add('cue'); g.scrollIntoView({block:'center',behavior:'smooth'}); } continue; } }
-    if(stage==='basics'){ if(r.focus==='phone') showPhoneChips(); if(val('name')&&val('phone')&&mode&&val('voice')) cueSource(); }
-    line=r.say||'Sorry, could you say that again?'; f=r.focus||null; } }
 function basicsOpener(){ if(!val('name')) return {line:S.name[0],f:'name'}; if(!val('phone')){ showPhoneChips(); return {line:S.phone[0],f:'phone'}; } if(!mode) return {line:S.mode[0],f:'mode'};
   if(!val('voice')) return {line:'For '+cap(mode)+', I recommend '+VOICES[mode][0][0].split(' (')[0]+'. Should I pick that voice?',f:'voice'}; cueSource(); return {line:S.source[0],f:null}; }
 function detailsOpener(){ var order=['company','industry','agent','role','goal','language','tone'];
@@ -810,30 +747,23 @@ function revealForm(){ if(!TALK) return; TALK=false; $('#card').classList.remove
 function progress(){ var el=$('#prog'); if(!TALK){ el.hidden=true; return; }
   var inBasics=stage!=='details', nb=['name','phone','mode','voice'].filter(has).length, nd=['company','industry','agent','role','goal','language','tone','guide'].filter(has).length;
   progMax=Math.max(progMax,inBasics?nb/4*40:40+nd/8*60); el.hidden=false; $('#progBar').style.width=Math.round(progMax)+'%'; $('#progT').textContent=inBasics?'Basics':'About your business'; }
-var LIVE={
- intro:async function(t){ await wait(500,t); await converse(t,S.intro[0],null); },
- basics:async function(t){ await wait(650,t); var o=basicsOpener(); await converse(t,o.line,o.f); },
- details:async function(t){ await wait(500,t); if(analysed&&!popOpen()&&EXTRA.some(function(x){ var f=$('#f-'+x.id); return f&&f.parentNode!==$('#extraGrid'); })) finishAnalysis();
-   var o=detailsOpener()||await runAnalysis(t); await converse(t,o.line,o.f); },
- upload:async function(t){ await wait(500,t); if(!upFile){ mark('up','active','Waiting'); await say(S.upAsk,t); return; } mark('up','done','Attached'); $('#upGo').classList.add('cue'); await converse(t,S.upGot[0],null); },
- result:async function(t){ if(!promptText) return; await wait(400,t); $('#saveBtn').classList.add('cue'); var n=$('#anRows').children.length; await converse(t,'Your prompt is ready. I also created '+n+' analytics fields and an analytics persona. Want to add anything, or shall I save it?',null); }
-};
-function liveWrap(k){ return async function(t){ try{ await LIVE[k](t); }catch(e){ if(!(e instanceof LiveFail)) throw e; if(t!==run) return; toast(e.message); $('#talk').hidden=true; setOrb('idle'); refresh(); } }; }
-var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return live?(GL.on?glStage(k):liveWrap(k)):SIMS[k]; }}); });
+var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k){ Object.defineProperty(SCRIPT,k,{get:function(){ return live?glRun(k):SIMS[k]; }}); });
 /* ================= GEMINI LIVE: one WebSocket for the whole build =================
    Opened when Create Assistant is clicked, closed once the assistant is saved (or the builder is closed).
    Gemini hears the mic and speaks itself; it changes the form only through tool calls, checked here.
+   There is no backup voice: if the connection drops, goes silent or Google asks to close it, the page reconnects
+   on its own (same model, same voice) and the bot continues from the current question.
    Interruptions: the bot's voice plays through a local WebRTC connection so Chrome's call echo cancellation removes it
    from the mic, and while the bot talks the mic only cuts in on clear speech (see glMic). With interruptions off,
    the mic is not sent at all while the bot talks.
-   If Live cannot connect or drops, the turn-based mode above takes over. */
+ */
 var GL={ws:null,on:false,inCtx:null,outCtx:null,node:null,src:null,until:0,srcs:[],heard:false,said:'',you:'',newBot:true,newYou:true,quiet:false,quietT:null,closeAfter:false};
 var PCM16K="class P extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.p=0;this.s=0;this.n=0;this.b=[];}process(i){var c=i[0]&&i[0][0];if(c){for(var k=0;k<c.length;k++){this.s+=c[k];this.n++;this.p+=1;if(this.p>=this.r){this.p-=this.r;this.b.push(this.s/this.n);this.s=0;this.n=0;}}if(this.b.length>=1600){this.port.postMessage(new Float32Array(this.b));this.b=[];}}return true;}}registerProcessor('pcm16k',P);";
 function glNorm(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
 function glEcho(t){ var a=glNorm(t); return a.length>3&&(glNorm(GL.said).indexOf(a)>=0||glNorm(GL.lastSaid).indexOf(a)>=0); }
 function glSpeaking(){ return !!GL.outCtx&&GL.outCtx.currentTime<GL.until+0.3; }
 function glSend(o){ if(GL.ws&&GL.ws.readyState===1) GL.ws.send(JSON.stringify(o)); }
-function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); }
+function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); glArm(); }
 /* the next line the app would speak is already in a tool result, so skip it once */
 function glHush(){ GL.quiet=true; clearTimeout(GL.quietT); GL.quietT=setTimeout(function(){ GL.quiet=false; },4000); }
 function glQuiet(){ if(!GL.quiet) return false; GL.quiet=false; clearTimeout(GL.quietT); return true; }
@@ -883,16 +813,24 @@ function glPcm(f){
 function glPlay(b64){ var ctx=GL.outCtx; if(!ctx||!sound) return; var bin=atob(b64), n=bin.length>>1, f=new Float32Array(n);
   for(var i=0;i<n;i++){ var v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8); if(v>=32768) v-=65536; f[i]=v/32768; }
   var buf=ctx.createBuffer(1,n,24000); buf.copyToChannel(f,0); var s=ctx.createBufferSource(); s.buffer=buf; s.connect(GL.mix||ctx.destination);
-  var at=Math.max(ctx.currentTime+0.04,GL.until); s.start(at); GL.until=at+buf.duration; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
+  var at=Math.max(ctx.currentTime+0.04,GL.until); GL.lastStart=at; s.start(at); GL.until=at+buf.duration; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
 function glHushAudio(){ GL.srcs.forEach(function(s){ try{ s.stop(); }catch(e){} }); GL.srcs=[]; GL.until=0; }
 function glMsg(m){ var sc=m.serverContent;
+  if(m.toolCall||(m.serverContent&&(m.serverContent.modelTurn||m.serverContent.outputTranscription))) glDisarm();
+  if(m.goAway){ GL.goAway=true; }
   if(m.toolCall){ var heard=GL.heard&&!(GL.overBot&&glEcho(GL.you)); glTools(m.toolCall.functionCalls||[],heard); }
   if(!sc) return;
   ((sc.modelTurn&&sc.modelTurn.parts)||[]).forEach(function(p){ if(p.inlineData&&p.inlineData.data) glPlay(p.inlineData.data); });
-  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
-  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.newBot=false; GL.newYou=true; GL.heard=false; fadeYou(); } GL.said+=sc.outputTranscription.text; setQ(GL.said.trim()); }
-  if(sc.interrupted) glHushAudio();
-  if(sc.turnComplete){ GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); } }
+  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); if(GL.you.trim().split(/\s+/).length>=2) glArm(12000); }
+  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.shown=''; GL.cap=(GL.cap||0)+1; GL.newBot=false; GL.newYou=true; GL.heard=false; fadeYou(); }
+    var piece=sc.outputTranscription.text, cap=GL.cap, lag=GL.outCtx&&sound?Math.max(0,(GL.lastStart||0)-GL.outCtx.currentTime):0; GL.said+=piece;
+    setTimeout(function(){ if(cap!==GL.cap) return; GL.shown+=piece; setQ(GL.shown.trim()); },lag*1000); }
+  if(sc.interrupted){ glHushAudio(); GL.newBot=true; }
+  if(sc.generationComplete) GL.newBot=true;
+  if(sc.turnComplete){ var capEnd=GL.cap, endLag=GL.outCtx&&sound?Math.max(0,GL.until-GL.outCtx.currentTime):0; setTimeout(function(){ if(capEnd===GL.cap&&GL.said) setQ(GL.said.trim()); },endLag*1000+300); /* never leave a caption half-written */
+    GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); else if(GL.goAway) glRenew(); } }
+/* Google sends goAway shortly before it ends a session: switch to a fresh one between sentences */
+function glRenew(){ GL.goAway=false; var n=0, iv=setInterval(function(){ if(glSpeaking()&&++n<100) return; clearInterval(iv); if(!GL.on||!botOn) return; var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(1000,'renew'); }catch(e){} } glDropped(); },100); }
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
 /* orb, talk box and pill follow the live audio */
 setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(busy?'work':'listen'); if(s!==orbState){ setOrb(s); refresh(); } if($('#talk').hidden){ $('#talk').hidden=false; micNote(); } $('#micBtn').classList.toggle('on',micOk&&micOn&&!glSpeaking()); },100);
@@ -901,7 +839,7 @@ setInterval(function(){ if(!GL.on||!botOn) return; var s=glSpeaking()?'speak':(b
 async function glTools(calls,heard){ var out=[];
   for(var i=0;i<calls.length;i++){ var c=calls[i], r; try{ r=await glTool(c.name,c.args||{},heard); }catch(e){ r={ok:false,error:e instanceof Cancel?'The form changed or was paused. Wait for the next [App] message.':String(e&&e.message||e)}; }
     out.push({id:c.id,name:c.name,response:r}); }
-  glSend({toolResponse:{functionResponses:out}}); }
+  glSend({toolResponse:{functionResponses:out}}); glArm(); }
 function glForm(){ return schema().map(function(f){ var o={id:f.id,label:f.label,value:f.value||'(empty)',required:f.required}; if(f.options) o.options=f.options; return o; }); }
 async function glTool(name,a,heard){ var t=run;
   if(name==='update_form'){
@@ -954,10 +892,30 @@ function glStage(k){ return async function(t){ await wait(k==='intro'?300:500,t)
   else if(k==='upload'){ if(!upFile){ mark('up','active','Waiting'); o={line:S.upAsk}; } else { mark('up','done','Attached'); $('#upGo').classList.add('cue'); o={line:S.upGot[0]+' If they agree, press validate.'}; } note='Step 2, upload, is on screen.'; }
   else if(k==='result'){ if(!promptText) return; $('#saveBtn').classList.add('cue'); o={line:'Your prompt is ready. I also created '+$('#anRows').children.length+' analytics fields and an analytics persona. Want to add anything, or shall I save it?'}; note='Step 3 is on screen with the generated prompt and analytics fields. If they want to save, press save.'; }
   if(TALK) note='The form is hidden: you collect the answers by voice and the app fills them in behind the scenes, so never refer to the screen. Field ids: name, phone, mode, voice, then company, industry, agent (sales representative name), role, goal, language, tone, guide.';
+  if(GL.resume){ note='The connection was briefly lost and is back; never mention it. The form so far: '+JSON.stringify(glForm())+'. '+note; if(GL.lost) o.line='Sorry, I missed that. '+o.line; GL.resume=false; GL.lost=false; }
   if(o.f) mark(o.f,'active','Asking'); glApp(note+' Say: '+o.line); }; }
-function glStop(){ GL.on=false; glHushAudio(); try{ if(GL.src) GL.src.disconnect(); if(GL.node){ GL.node.port.onmessage=null; GL.node.disconnect(); } }catch(e){} GL.src=GL.node=null; GL.closeAfter=false; GL.quiet=false; }
+function glStop(){ GL.on=false; glDisarm(); GL.goAway=false; glHushAudio(); try{ if(GL.src) GL.src.disconnect(); if(GL.node){ GL.node.port.onmessage=null; GL.node.disconnect(); } }catch(e){} GL.src=GL.node=null; GL.closeAfter=false; GL.quiet=false; }
 function glClose(){ var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(1000,'done'); }catch(e){} } aiLiveLabel(); }
-function glDropped(){ GL.ws=null; aiLiveLabel(); if(!botOn) return; toast('Gemini Live disconnected. Continuing in turn-based mode.'); if(!busy) start(SCRIPT[stage]); }
+/* connect with retries; used for the first connection and for every reconnect */
+function glReconnect(t){ if(GL.connecting) return GL.connecting;
+  var p=(async function(){ var waits=[0,800,2000,4000,7000];
+    for(var i=0;i<waits.length;i++){ if(waits[i]) await sleep(waits[i]); if((t!=null&&t!==run)||!$('#overlay').classList.contains('on')) throw new Cancel();
+      GL.note=GL.resume||i?'Reconnecting…':'Connecting…'; refresh();
+      try{ await glConnect(); GL.note=''; refresh(); return; }catch(e){ console.warn('Gemini Live connect failed:',e&&e.message); } }
+    GL.note=''; throw new LiveFail('Gemini is not responding right now'); })();
+  GL.connecting=p; p.then(function(){ GL.connecting=null; },function(){ GL.connecting=null; }); return p; }
+/* every live stage first makes sure the connection is up; if it cannot be, the person sees Try again */
+function glRun(k){ return async function(t){
+  if(!GL.on){ try{ await glReconnect(t); }catch(e){ if(e instanceof Cancel) throw e; check(t); glGiveUp(); return; } }
+  check(t); $('#liveErr').hidden=true; aiLiveLabel(); return glStage(k)(t); }; }
+function glGiveUp(){ GL.note=''; setOrb('idle'); refresh(); $('#talk').hidden=true; setQ('Gemini is not responding right now.'); $('#liveErr').hidden=false; }
+$('#liveRetry').onclick=function(){ $('#liveErr').hidden=true; botOn=true; GL.resume=stage!=='intro'; start(SCRIPT[stage]); };
+/* the connection dropped, went silent, or Google asked to close it: reconnect and carry on */
+function glDropped(){ GL.ws=null; aiLiveLabel(); if(!botOn||!$('#overlay').classList.contains('on')) return; GL.resume=true;
+  if(busy) glReconnect().catch(function(){}); else start(SCRIPT[stage]); }
+function glStalled(){ if(!GL.on||!botOn) return; console.warn('Gemini Live stopped replying, reconnecting'); var ws=GL.ws; GL.ws=null; glStop(); if(ws){ ws.onclose=null; try{ ws.close(); }catch(e){} } GL.lost=true; glDropped(); }
+function glArm(ms){ clearTimeout(GL.dog); GL.dog=setTimeout(glStalled,ms||12000); }
+function glDisarm(){ clearTimeout(GL.dog); }
 function aiLiveLabel(){ if(GL.on){ $('#dAi').textContent='AI: Gemini Live'; $('#dAi').className='ok'; $('#dAi').title='Connected over WebSocket to Gemini Live'; } else if(!aiDown) aiStatus(true); }
 
 
@@ -1002,7 +960,7 @@ function demoCall(a,inp,cb){ var num=inp.value.replace(/[^\d+]/g,''), digits=num
 /* Edit and Configure open the builder filled with the saved assistant; saving updates that same card */
 var editId=null;
 function editAssistant(id){ var a=loadList().filter(function(x){ return x.id===id; })[0]; if(!a) return;
-  resetAll(); editId=id; $('#overlay').classList.add('on'); openForm();
+  resetAll(); editId=id; dirty=false; $('.fHead h2').textContent='Edit Voice Assistant'; $('#overlay').classList.add('on'); openForm();
   function put(k,v){ var e=$('#i-'+k); if(!e||!v) return; if(e.tagName==='SELECT'){ if(![].some.call(e.options,function(o){ return o.value===v||o.textContent===v; })){ var o=document.createElement('option'); o.textContent=v; e.appendChild(o); } var m=[].filter.call(e.options,function(o){ return o.value===v||o.textContent===v; })[0]; e.value=m.value; } else e.value=v; asked[k]=true; mark(k,'done','Saved'); }
   put('name',a.name); put('phone',a.phone); if(a.phone){ showPhoneChips(); }
   if(a.mode){ setMode(a.mode); asked.mode=true; mark('mode','done','Saved'); var vs=$('#i-voice'), vo=[].filter.call(vs.options,function(o){ return o.textContent.split(' (')[0]===a.voice; })[0]; if(vo){ vs.value=vo.value; asked.voice=true; mark('voice','done','Saved'); } }
@@ -1013,18 +971,17 @@ function editAssistant(id){ var a=loadList().filter(function(x){ return x.id===i
   EXTRA.forEach(function(x,i){ $('#extraGrid').appendChild(extraField(x)); $('#i-'+x.id).value=(a.extra[i]||{}).value||''; mark(x.id,'done','Saved'); });
   $('#extraBox').hidden=!EXTRA.length; analysed=!!(a.extra||a.prompt);
   source=a.source||'gen'; upFile=a.upFile||''; if(upFile) addFile('upFiles',upFile);
-  promptText=a.prompt||''; $('#prompt').value=promptText; var w=promptText.split(/\s+/).filter(Boolean).length; $('#sWords').textContent=w; $('#sTok').textContent='~'+Math.round(w*1.35);
+  promptText=a.prompt||''; $('#prompt').value=promptText;
   $('#resMode').textContent=source==='upload'?'Uploaded':(a.mode==='premium'?'Premium':'Standard');
   $('#anRows').innerHTML=''; (a.analytics||[]).forEach(function(r){ addAn(r[0],r[1],r[2]); }); $('#i-persona').value=a.persona||'';
-  botOn=false; setStage('basics'); setQ('Editing '+a.name+'. Change anything in the three steps, then press Save Voice Assistant. Press Play if you want me to help.'); setYou(''); setOrb('idle'); refresh(); }
+  botOn=false; dirty=false; setStage('basics'); setQ('Editing '+a.name+'. Change anything you need, then press Save changes.'); setYou(''); setOrb('idle'); refresh(); }
+$('#formPane').addEventListener('input',markDirty); $('#formPane').addEventListener('change',markDirty);
 
 async function askGenerate(t){ var g=$('#genBtn'); g.scrollIntoView({block:'center',behavior:'smooth'}); g.classList.add('cue'); await say(S.askGen[0],t); if(!autoAns) return; await wait(1800,t); await hear(S.askGen[1],t); await press(g,t); runFlow('gen'); }
 
 function chooseBot(){ botOn=true; TALK=true; progMax=0; $('#card').classList.add('talking'); setStage('basics'); progress(); start(SCRIPT.basics); }
 function chooseManual(){ run++; stopSpeech(); botOn=false; openForm(); setStage('basics'); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
-function pickSource(k){ source=k; if(k==='upload') revealForm(); progress(); $('#srcGen').classList.remove('cue'); $('#srcUp').classList.remove('cue'); go(k==='gen'?'details':'upload'); }
-function tabGo(s){ if(stage==='intro') return; botOn=false; go(s); setQ(S.manual); setYou(''); setOrb('idle'); refresh(); }
-$('#tab1').onclick=function(){ tabGo('basics'); }; $('#tab2').onclick=function(){ tabGo(source==='upload'?'upload':'details'); }; $('#tab3').onclick=function(){ tabGo('result'); };
+function pickSource(k){ source=k; markDirty(); if(k==='upload') revealForm(); progress(); $('#srcGen').classList.remove('cue'); $('#srcUp').classList.remove('cue'); go(k==='gen'?'details':'upload'); }
 $('#introBot').onclick=chooseBot; $('#introManual').onclick=chooseManual;
 $('#srcGen').onclick=function(){ pickSource('gen'); }; $('#srcUp').onclick=function(){ pickSource('upload'); };
 
@@ -1050,10 +1007,11 @@ async function readDocs(fs){ var used=docData.reduce(function(n,d){ return n+(d.
     if(!d||!size||docData.length>=3||used+size>4.2e6){ skipped.push(fs[i].name); continue; } used+=size; docData.push(d); }
   if(skipped.length) toast('Could not read '+skipped.join(', ')+' (type or size). Only the file name is used. PDF, Word, text or images up to about 3 MB work.'); }
 $('#filePick').onchange=async function(e){ var fs=[].slice.call(e.target.files); e.target.value=''; if(!fs.length) return;
+  markDirty();
   if(pickFor==='doc'){ fs.forEach(function(f){ addFile('docFiles',f.name); docs.push(f.name); }); mark('docs','active','Reading'); await readDocs(fs); mark('docs','done','Uploaded'); asked.docs=true; }
   else { attachPrompt(fs[0].name); if(botOn) start(SCRIPT.upload); }
   if(pickFor==='doc'&&GL.on&&botOn){ asked.docs=true; mark('docs','done','Uploaded'); glApp('The person uploaded '+fs.map(function(f){ return f.name; }).join(', ')+'. The docs field is done. '+glNext()); }
-  if(pickFor==='doc'&&waitRes) waitRes('[I uploaded the file '+fs.map(function(f){ return f.name; }).join(', ')+']'); };
+ };
 
 /* ---------- popups ---------- */
 function openPop(html){ $('#popCard').innerHTML=html; $('#pop').classList.add('on'); }
@@ -1113,13 +1071,13 @@ function buildResult(kind,out){ var c=val('company')||'[COMPANY NAME]', ag=val('
   var an=ANALYTICS, persona=kind==='upload'?'':PERSONA.replace('{company}',c);
   if(out&&out.prompt){ promptText=out.prompt; if(out.analytics&&out.analytics.length) an=out.analytics.map(function(a){ return [a.name,['String','Number','Boolean','Date'].filter(function(x){ return x.toLowerCase()===String(a.type).toLowerCase(); })[0]||'String',a.description]; }); if(out.persona) persona=out.persona; }
   $('#resMode').textContent=kind==='upload'?'Uploaded':(mode==='premium'?'Premium':'Standard');
-  var w=promptText.split(/\s+/).filter(Boolean).length; $('#sWords').textContent=w; $('#sTok').textContent='~'+Math.round(w*1.35);
+ 
   var rows=$('#anRows'); rows.innerHTML=''; an.forEach(function(a){ addAn(a[0],a[1],a[2]); });
-  $('#i-persona').value=persona; }
+  $('#i-persona').value=persona; markDirty(); }
 function addAn(n,ty,d){ var r=document.createElement('div'); r.className='an'; r.innerHTML='<label>Field Name<input class="ctl nm" placeholder="e.g., interested_in_demo"></label><label>Description<input class="ctl" placeholder="What should be extracted?"></label><button aria-label="Remove field"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg></button><label class="ty">Type<select class="ctl"><option>String</option><option>Number</option><option>Boolean</option><option>Date</option></select></label>';
-  var c=r.querySelectorAll('.ctl'); c[0].value=n; c[1].value=d; c[2].value=ty; r.querySelector('button').onclick=function(){ r.remove(); cnt(); }; $('#anRows').appendChild(r); cnt(); return r; }
-function cnt(){ var n=$('#anRows').children.length; $('#anCount').textContent=n+' fields'; if(stage==='result'&&promptText) $('#footMsg').textContent='System prompt attached · '+n+' analytics fields ready'; }
-$('#anAdd').onclick=function(){ var r=addAn('','String',''); r.scrollIntoView({block:'center',behavior:'smooth'}); };
+  var c=r.querySelectorAll('.ctl'); c[0].value=n; c[1].value=d; c[2].value=ty; r.querySelector('button').onclick=function(){ r.remove(); cnt(); markDirty(); }; $('#anRows').appendChild(r); cnt(); return r; }
+function cnt(){ var n=$('#anRows').children.length; $('#anCount').textContent=n+' fields'; if(!editId&&promptText) $('#footMsg').textContent='System prompt attached · '+n+' analytics fields ready'; }
+$('#anAdd').onclick=function(){ markDirty(); var r=addAn('','String',''); r.scrollIntoView({block:'center',behavior:'smooth'}); };
 async function streamPrompt(t){ var e=$('#prompt'); e.value=''; for(var i=0;i<promptText.length;i+=14){ e.value=promptText.slice(0,i); e.scrollTop=e.scrollHeight; await sleep(16); check(t); } e.value=promptText; e.scrollTop=0; }
 $('#editBtn').onclick=function(){ var e=$('#prompt'); var on=e.readOnly; e.readOnly=!on; e.classList.toggle('edit',on); this.textContent=on?'Done editing':'Edit prompt'; if(on) e.focus(); };
 $('#regenBtn').onclick=function(){ runFlow(source||'gen'); };
@@ -1147,7 +1105,7 @@ $('#playBtn').onclick=function(){
   botOn=true; refresh(); if(busy) return; if(stage==='intro'){ start(SCRIPT.intro); return; } start(SCRIPT[stage]); };
 $('#redoBtn').onclick=function(){ if(stage==='intro'){ botOn=true; start(SCRIPT.intro); return; } if(stage==='result'){ runFlow(source||'gen'); return; } closePop(); busy=false; clearStage(); botOn=true; setStage(stage); start(SCRIPT[stage]); };
 $('#sndBtn').onclick=function(){ sound=!sound; if(!sound) stopSpeech(); refresh(); };
-function resetAll(){ run++; stopSpeech(); glClose(); TALK=false; $('#card').classList.remove('talking'); $('#prog').hidden=true; editId=null; botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
+function resetAll(){ run++; stopSpeech(); glClose(); GL.resume=GL.lost=false; GL.note=''; $('#liveErr').hidden=true; $('.fHead h2').textContent='Create Voice Assistant'; dirty=false; TALK=false; $('#card').classList.remove('talking'); $('#prog').hidden=true; editId=null; botOn=false; busy=false; closePop(); $('#done').classList.remove('on');
   ['basics','details','upload'].forEach(function(s){ stage=s; clearStage(); }); asked={}; partial={}; source=''; promptText=''; $('#prompt').value=''; $('#anRows').innerHTML=''; $('#i-persona').value=''; cnt();
   [].forEach.call(document.querySelectorAll('.cue'),function(b){ b.classList.remove('cue'); });
   $('#card').classList.remove('open'); $('#talk').hidden=true; setStage('intro'); setQ(''); setYou(''); setOrb('idle'); }
@@ -1155,11 +1113,7 @@ function closeAll(){ resetAll(); releaseMic(); $('#overlay').classList.remove('o
 function openDemo(){ resetAll(); if(aiDown){ aiDown=false; pingAi(); } $('#overlay').classList.add('on'); botOn=true; refresh();
   var t0=run, ask=setTimeout(function(){ if(run===t0) setQ('Please allow the microphone so I can hear you.'); },400);
   if(live) glPrime(); /* audio needs this click */
-  warmMic().then(function(){ clearTimeout(ask); if(run!==t0||!botOn) return;
-    if(!live||aiDown) return start(SCRIPT.intro);
-    setQ('Connecting to Gemini Live…');
-    return glConnect().then(function(){ aiLiveLabel(); }, function(e){ toast((e&&e.message||'Gemini Live is not available')+'. Using turn-based mode.'); })
-      .then(function(){ if(run===t0&&botOn) start(SCRIPT.intro); }); }); }
+  warmMic().then(function(){ clearTimeout(ask); if(run===t0&&botOn) start(SCRIPT.intro); }); }
 $('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#vClose').onclick=closeAll; $('#doneClose').onclick=closeAll; $('#againBtn').onclick=openDemo; $('#dRestart').onclick=openDemo;
 $('#demoTog').onclick=function(){ var h=$('#demo').classList.toggle('hide'); this.classList.toggle('on',!h); this.setAttribute('aria-label',h?'Show demo controls':'Hide demo controls'); };
 if(params.has('demo')){ $('#demo').classList.remove('hide'); $('#demoTog').classList.add('on'); }

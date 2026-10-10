@@ -7,40 +7,6 @@
 const DEFAULT_MODELS = ['gemini-3.5-flash-lite', 'gemini-3.5-flash', 'gemini-3.8-flash'];
 const ENDPOINT = 'https://generativelanguage.googleapis.com/v1beta/models/';
 
-const ACTIONS = {
-  intro: ['build_with_ai', 'build_manually'],
-  basics: ['upload_prompt', 'generate_with_ai'],
-  details: [],
-  extra: ['generate_prompt'],
-  upload: ['validate'],
-  result: ['save']
-};
-
-const STAGE_HINT = {
-  intro: 'There are no fields yet. The person is choosing between you building the assistant with them (action build_with_ai) and filling the form by hand (action build_manually). Decide by meaning, not exact wording; any phrasing, word order or speech recognition slip that means the same thing counts. build_with_ai examples: "build with you", "let us build it with you", "let us do it together", "you build it", "you do it", "do it for me", "help me build it", "AI please", "automatic", "the AI way", "bill with you" (misheard build), "go ahead", "yes". build_manually examples: "manual", "manually", "I will build it myself", "let me do it", "I will fill it in", "I will type it", "I would rather fill the form". Only ask again if the answer fits neither, for example a greeting or an unrelated question.',
-  basics: 'Ask for each empty field in order. When every field is filled, ask whether they already have a system prompt to upload or want you to generate one with them, then use action upload_prompt or generate_with_ai. Never use those actions while a required field is still empty.',
-  details: 'Ask for each empty field in order. The field "docs" is a file upload that only the person can do: ask whether they want to add documents; if yes, tell them to click the upload box and wait (no update); if they say no, or ask you to generate without uploading, set docs to "skip". A user message like "[I uploaded the file x.pdf]" means it is done, so move on. When every field is filled or skipped, say only that you will now check what you have.',
-  extra: 'These extra details were found missing after analysis. Ask for each empty one. The field "docs" is a file upload that only the person can do: ask whether they want to add documents and tell them to click the upload box; if they say no, set docs to "skip"; a user message like "[I uploaded the file x.pdf]" means it is done. When all are filled or skipped, ask whether you should generate the prompt. If they agree, use action generate_prompt.',
-  upload: 'A system prompt file is attached. Ask whether you should validate and test it. If they agree, use action validate.',
-  result: 'The prompt, analytics fields and analytics persona are ready. The person can ask you to add analytics fields (use add_analytics) or to save the assistant (action save). For changes to the prompt text, tell them to press Edit prompt.'
-};
-
-const TURN_SYSTEM = [
-  'You are the voice setup assistant inside a "Create Voice Assistant" form on a voice AI platform.',
-  'You talk with the person who is building a phone assistant and you fill in the form for them.',
-  'Your words are read aloud by text to speech, so write plain spoken sentences: no markdown, no lists, no emojis, no quotation marks.',
-  '',
-  'Each turn you receive JSON with: stage, stage_hint, fields (the form fields in the order to ask them, with their current values), last_bot (what you just said), asking (the id of the field you were asking about, if any), user (what the person just said, transcribed from speech, so it may contain recognition mistakes) and allowed_actions.',
-  '',
-  'At the intro, classify the meaning of the answer rather than matching exact words. Requests to build it with you, together, or for the person mean build_with_ai; requests to fill it in themselves mean build_manually. Paraphrases like "build with you" and "let us build it with you" express the same choice.',
-  'Reply with one JSON object and nothing else, with exactly these keys:',
-  '"updates": array of {"id","value"}. One entry for every field the user message answers. It can be several fields at once, or none. For a select field the value must be copied exactly from its options. For a text field write a clean value: fix capitalisation and obvious speech to text slips, keep it concise, keep the meaning. STRICT RULE: only fill a field with something the person actually said in this message. Never fill a field they have not answered, never guess, never use example or placeholder values, and never fill several fields from one short answer unless they really gave all of them. A bare yes, ok or go ahead fills nothing, unless you had just recommended one specific option for the field you were asking about; then fill that option. If they explicitly tell you to choose for them, you may pick a sensible value for that one field only. If they decline an optional field (required is false), use the value "skip". Never use "skip" or any placeholder for a required field: if they decline or dodge a required field, say briefly why it is needed and ask again. Never change a field that already has a value unless the person clearly corrects it in this message.',
-  '"say": string. What you say next, one or two short sentences. Acknowledge briefly, then ask for the next field that is still empty, in the listed order, one field at a time. When a select field is next, mention the options or your recommendation in a few words. If the person asked you something, answer it in one sentence first. If you did not understand, ask again simply.',
-  '"focus": string. The id of the field you are asking about now, or "" if none.',
-  '"action": string. One of allowed_actions, or "none". Only pick an action when the person clearly asks for it and stage_hint allows it.',
-  '"add_analytics": array of {"name","description","type"}. Only in stage "result", for analytics fields the person asks to add. name is snake_case, type is String, Number, Boolean or Date. Otherwise an empty array.'
-].join('\n');
-
 const ANALYZE_SYSTEM = [
   'You review the answers collected for the system prompt of a phone voice agent, together with any company documents attached after the JSON (price lists, FAQs, service details).',
   'You receive JSON with fields (label and value). Decide which important details callers of this kind of business will very likely need, for example working hours, how to hand off to a human, how bookings are made, prices, or the service area.',
@@ -253,33 +219,7 @@ function mock(kind, b) {
     const get = (l) => ((b.fields || []).filter((f) => f.label === l)[0] || {}).value || '[' + l.toUpperCase() + ']';
     return { prompt: '# System Prompt: ' + get('Company name') + ' Voice Assistant\n\n## 1. Identity and Core Mission\nYou are ' + get('Sales representative name') + ', the ' + get('Agent role') + '.\nGoal: ' + get('Agent goal') + '\n\n## 2. Call Flow\n1. Greet the caller.\n2. Ask how you can help.\n\n(Mock prompt: MOCK_AGENT is on.)', analytics: [{ name: 'caller_name', description: 'Name of the caller', type: 'String' }, { name: 'appointment_booked', description: 'Whether an appointment was booked', type: 'Boolean' }], persona: 'You are analyzing calls for ' + get('Company name') + '. Focus on what the caller wanted and how the call ended.' };
   }
-  const user = String(b.user || ''); const fields = b.fields || []; const out = { updates: [], say: '', focus: '', action: 'none', add_analytics: [] };
-  const empty = () => fields.filter((f) => !f.value);
-  if (b.stage === 'intro') {
-    if (/\b(manual|myself|by myself|on my own|fill it in|fill this in|i will do it|i'll do it)\b/i.test(user)) out.action = 'build_manually';
-    else if (/\b(with you|together|for me|you can|you do it|go ahead|please do|build|create|make|yes|yeah|yep|sure|okay|ok)\b/i.test(user)) out.action = 'build_with_ai';
-    else out.say = 'Would you like me to build it with you, or would you rather fill it in yourself?';
-    return out;
-  }
-  if (b.stage === 'result') { if (/save/i.test(user)) out.action = 'save'; else if (/add/i.test(user)) { out.add_analytics = [{ name: 'preferred_time', description: 'Time of day the caller prefers', type: 'String' }]; out.say = 'Added. Anything else, or shall I save it?'; } else out.say = 'Shall I save it?'; return out; }
-  if (b.stage === 'upload') { out.action = /yes|ok|sure|go/i.test(user) ? 'validate' : 'none'; out.say = 'Shall I validate it?'; return out; }
-  const first = empty()[0];
-  if (first) {
-    let v = user;
-    if (first.type === 'file') v = /\[I uploaded/.test(user) ? '' : 'skip';
-    else if (first.options) v = first.options.filter((o) => user.toLowerCase().split(/\W+/).some((w) => w.length > 3 && o.toLowerCase().includes(w)))[0] || first.options[0];
-    else if (!first.required && /^(no|none|skip)/i.test(user)) v = 'skip';
-    if (v) { out.updates.push({ id: first.id, value: v }); first.value = v; }
-    else if (first.type === 'file') first.value = 'done';
-  } else {
-    if (b.stage === 'basics') out.action = /upload/i.test(user) ? 'upload_prompt' : 'generate_with_ai';
-    if (b.stage === 'extra') out.action = 'generate_prompt';
-    return out;
-  }
-  const next = empty()[0];
-  if (next) { out.say = 'Got it. What about ' + next.label.toLowerCase() + '?'; out.focus = next.id; }
-  else out.say = b.stage === 'basics' ? 'Do you want to upload a system prompt, or should I generate one?' : (b.stage === 'extra' ? 'Shall I generate the prompt?' : 'Let me check what I have.');
-  return out;
+  return {};
 }
 
 /* ---- tiny in-memory rate limit: protects the key on a public demo link ---- */
@@ -295,7 +235,7 @@ async function handle(body) {
   try {
     const b = body && typeof body === 'object' ? body : {};
     const kind = clip(b.kind, 12);
-    if (!['turn', 'analyze', 'prompt', 'tts', 'ping', 'live'].includes(kind)) return { status: 400, json: { error: 'Unknown kind' } };
+    if (!['analyze', 'prompt', 'tts', 'ping', 'live'].includes(kind)) return { status: 400, json: { error: 'Unknown kind' } };
     if (limited()) return { status: 429, json: { error: 'Too many requests, try again in a minute' } };
     const fields = cleanFields(b.fields);
     if (kind === 'ping') {
@@ -332,22 +272,7 @@ async function handle(body) {
         persona: clip(r.persona, 600)
       } };
     }
-    const stage = ACTIONS[b.stage] ? b.stage : 'basics';
-    const allowed = ACTIONS[stage];
-    const r = await callGemini(TURN_SYSTEM, {
-      stage: stage, stage_hint: STAGE_HINT[stage], allowed_actions: allowed.concat('none'),
-      fields: fields, last_bot: clip(b.last_bot, 500), asking: clip(b.focus, 40), user: clip(b.user, 800)
-    }, 2048, 0.3, 9000, { fast: true, hedge: 2500 });
-    // Backstop for the prompt rules: only known fields, and never "skip" on a required field.
-    const byId = {}; fields.forEach((f) => { byId[f.id] = f; });
-    const updates = arr(r.updates).slice(0, 12).map((u) => ({ id: clip(u && u.id, 40), value: clip(u && u.value, 1500).trim() }))
-      .filter((u) => byId[u.id] && u.value && !(byId[u.id].required && /^(skip|skipped|none|n\/a|no)$/i.test(u.value)));
-    return { status: 200, json: {
-      updates: updates,
-      say: clip(r.say, 400), focus: clip(r.focus, 40),
-      action: allowed.includes(r.action) ? r.action : 'none',
-      add_analytics: arr(r.add_analytics).slice(0, 4).map((a) => ({ name: clip(a.name, 40), description: clip(a.description, 160), type: clip(a.type, 10) }))
-    } };
+    return { status: 400, json: { error: 'Unknown kind' } };
   } catch (e) {
     return { status: e.status || 500, json: { error: clip(e.message || 'Agent error', 300) } };
   }
