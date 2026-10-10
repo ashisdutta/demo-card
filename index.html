@@ -437,6 +437,7 @@ textarea.ctl{height:auto;padding:11px 14px;line-height:22px;resize:none;display:
   <em id="dAi">AI: checking…</em>
   <button id="dAuto" class="on">Auto-answer: on</button>
   <button id="dUser">Speak answers: off</button>
+  <button id="dBarge" class="on">Interruptions: on</button>
 </div>
 <div id="toast" role="status"></div>
 <input type="file" id="filePick" hidden multiple>
@@ -684,7 +685,7 @@ function startRec(){ if(!micOk||!micOn||rec) { micNote(); return; }
    (one-time "Allow this time" grants, Safari, http pages that are not localhost). */
 var micStream=null;
 function warmMic(){ if(!live||!micOk||!micOn||micStream||!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return Promise.resolve();
-  return navigator.mediaDevices.getUserMedia({audio:true}).then(function(st){ micStream=st; if(/Android/i.test(navigator.userAgent)) releaseMic(); /* Android cannot share the mic with speech recognition */ })
+  return navigator.mediaDevices.getUserMedia({audio:{echoCancellation:true,noiseSuppression:true,autoGainControl:true}}).then(function(st){ micStream=st; if(/Android/i.test(navigator.userAgent)) releaseMic(); /* Android cannot share the mic with speech recognition */ })
     .catch(function(e){ if(e&&/NotAllowed|Security|NotFound/.test(e.name)){ micOk=false; micNote(); toast('Microphone is blocked. Type your answers, or allow the mic from the address bar and press Restart.'); } }); }
 function releaseMic(){ if(micStream){ micStream.getTracks().forEach(function(k){ k.stop(); }); micStream=null; } }
 function stopRec(){ if(rec){ var r=rec; rec=null; r.onend=null; r.onresult=null; try{ r.abort(); }catch(e){} } }
@@ -694,7 +695,7 @@ function listen(t){ need(t); setOrb('listen'); refresh(); $('#talk').hidden=fals
     waitRes=function(text){ text=String(text||'').trim(); if(!text) return; setYou(text); fin(text); };
     var iv=setInterval(function(){ if(t!==run||!botOn) fin(null,new Cancel()); },80);
     setTimeout(function(){ if(!done) startRec(); },300); }); }
-function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&GL.on){ $('#sayBox').value=''; GL.heard=true; GL.newYou=false; GL.you=v; setYou(v); glSend({realtimeInput:{text:v}}); return; } if(v&&waitRes){ $('#sayBox').value=''; waitRes(v); } }
+function sendTyped(){ var v=$('#sayBox').value.trim(); if(v&&GL.on){ $('#sayBox').value=''; GL.heard=true; GL.newYou=false; GL.overBot=false; GL.you=v; setYou(v); glSend({realtimeInput:{text:v}}); return; } if(v&&waitRes){ $('#sayBox').value=''; waitRes(v); } }
 $('#sendBtn').onclick=sendTyped; $('#sayBox').onkeydown=function(e){ if(e.key==='Enter'){ e.preventDefault(); sendTyped(); } };
 $('#micBtn').onclick=function(){ if(!micOk){ toast('Speech recognition is not available in this browser. Type your answer.'); return; } micOn=!micOn; if(micOn){ if(waitRes) startRec(); } else stopRec(); micNote(); };
 
@@ -794,10 +795,14 @@ var SCRIPT={}; ['intro','basics','details','upload','result'].forEach(function(k
 /* ================= GEMINI LIVE: one WebSocket for the whole build =================
    Opened when Create Assistant is clicked, closed once the assistant is saved (or the builder is closed).
    Gemini hears the mic and speaks itself; it changes the form only through tool calls, checked here.
-   The mic is not sent while the bot's audio plays, so it never hears itself.
+   Interruptions: the bot's voice plays through a local WebRTC connection so Chrome's call echo cancellation removes it
+   from the mic, and while the bot talks the mic only cuts in on clear speech (see glMic). With interruptions off,
+   the mic is not sent at all while the bot talks.
    If Live cannot connect or drops, the turn-based mode above takes over. */
 var GL={ws:null,on:false,inCtx:null,outCtx:null,node:null,src:null,until:0,srcs:[],heard:false,said:'',you:'',newBot:true,newYou:true,quiet:false,quietT:null,closeAfter:false};
 var PCM16K="class P extends AudioWorkletProcessor{constructor(){super();this.r=sampleRate/16000;this.p=0;this.s=0;this.n=0;this.b=[];}process(i){var c=i[0]&&i[0][0];if(c){for(var k=0;k<c.length;k++){this.s+=c[k];this.n++;this.p+=1;if(this.p>=this.r){this.p-=this.r;this.b.push(this.s/this.n);this.s=0;this.n=0;}}if(this.b.length>=1600){this.port.postMessage(new Float32Array(this.b));this.b=[];}}return true;}}registerProcessor('pcm16k',P);";
+function glNorm(x){ return String(x||'').toLowerCase().replace(/[^a-z0-9 ]+/g,' ').replace(/\s+/g,' ').trim(); }
+function glEcho(t){ var a=glNorm(t); return a.length>3&&(glNorm(GL.said).indexOf(a)>=0||glNorm(GL.lastSaid).indexOf(a)>=0); }
 function glSpeaking(){ return !!GL.outCtx&&GL.outCtx.currentTime<GL.until+0.3; }
 function glSend(o){ if(GL.ws&&GL.ws.readyState===1) GL.ws.send(JSON.stringify(o)); }
 function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); }
@@ -805,7 +810,21 @@ function glApp(text){ glSend({realtimeInput:{text:'[App] '+text}}); }
 function glHush(){ GL.quiet=true; clearTimeout(GL.quietT); GL.quietT=setTimeout(function(){ GL.quiet=false; },4000); }
 function glQuiet(){ if(!GL.quiet) return false; GL.quiet=false; clearTimeout(GL.quietT); return true; }
 /* audio contexts are created inside the Create Assistant click, so the browser lets them play */
-function glPrime(){ try{ if(!GL.outCtx) GL.outCtx=new AudioContext({sampleRate:24000}); if(!GL.inCtx) GL.inCtx=new AudioContext(); GL.outCtx.resume(); GL.inCtx.resume(); }catch(e){} }
+function glPrime(){ try{ if(!GL.outCtx) GL.outCtx=new AudioContext({sampleRate:24000}); if(!GL.inCtx) GL.inCtx=new AudioContext(); GL.outCtx.resume(); GL.inCtx.resume(); glLoopback(); }catch(e){} }
+/* Chrome removes echo reliably only for audio it plays from a WebRTC call, so the bot's voice is sent through a
+   WebRTC connection from the page to itself and played from an <audio> element. Until that is up, it plays directly. */
+function glLoopback(){ var ctx=GL.outCtx; if(GL.mix||!ctx) return; GL.mix=ctx.createGain(); GL.mix.connect(ctx.destination);
+  if(!window.RTCPeerConnection||!ctx.createMediaStreamDestination) return;
+  var dest=ctx.createMediaStreamDestination(), a=new RTCPeerConnection(), b=new RTCPeerConnection(), el=new Audio(); el.autoplay=true; GL.loop={a:a,b:b,el:el,on:false};
+  a.onicecandidate=function(e){ if(e.candidate) b.addIceCandidate(e.candidate).catch(function(){}); };
+  b.onicecandidate=function(e){ if(e.candidate) a.addIceCandidate(e.candidate).catch(function(){}); };
+  b.ontrack=function(e){ el.srcObject=(e.streams&&e.streams[0])||new MediaStream([e.track]);
+    el.play().then(function(){ GL.mix.disconnect(); GL.mix.connect(dest); GL.loop.on=true; }).catch(function(){ /* stays on direct playback */ }); };
+  dest.stream.getTracks().forEach(function(t){ a.addTrack(t,dest.stream); });
+  var hi=function(d){ d.sdp=d.sdp.replace(/(a=fmtp:\d+ [^\r\n]*useinbandfec=1)/,'$1;maxaveragebitrate=96000'); return d; }; /* clearer voice than the default call bitrate */
+  a.createOffer().then(function(o){ return a.setLocalDescription(hi(o)); }).then(function(){ return b.setRemoteDescription(a.localDescription); })
+   .then(function(){ return b.createAnswer(); }).then(function(o){ return b.setLocalDescription(hi(o)); }).then(function(){ return a.setRemoteDescription(b.localDescription); })
+   .catch(function(){}); }
 function glConnect(){ return rawAgent({kind:'live'},15000).then(function(j){ return new Promise(function(res,rej){ var ok=false, ws=new WebSocket(j.url+'?access_token='+encodeURIComponent(j.token)); GL.ws=ws;
     var to=setTimeout(function(){ if(!ok){ try{ ws.close(); }catch(e){} rej(new LiveFail('Gemini Live did not answer')); } },10000);
     ws.onopen=function(){ ws.send(JSON.stringify({setup:{model:'models/'+j.model}})); };
@@ -817,21 +836,33 @@ function glMicStart(){ if(!micStream||!GL.inCtx||GL.node) return; var ctx=GL.inC
   ctx.audioWorklet.addModule(url).then(function(){ if(!GL.on||!micStream) return; var src=ctx.createMediaStreamSource(micStream), node=new AudioWorkletNode(ctx,'pcm16k'), mute=ctx.createGain(); mute.gain.value=0;
     node.port.onmessage=function(e){ glMic(e.data); }; src.connect(node); node.connect(mute); mute.connect(ctx.destination); GL.src=src; GL.node=node; })
    .catch(function(){ toast('Could not stream the microphone. Type your answers.'); }); }
-function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk||glSpeaking()) return;
+/* While the bot talks, the mic is held back until someone speaks clearly over it: 0.3 s of sound well above the
+   leftover echo level (learned while the bot talks). Then the last 0.5 s and everything after go to Gemini, which stops
+   the bot. Short sounds, "hmm" and remaining echo do not cut it off. */
+var BARGE={on:!params.has('nointerrupt'),echo:0.004,run:0,pre:[]};
+function glMic(f){ if(!GL.on||!botOn||!micOn||!micOk) return;
+  if(glSpeaking()&&!GL.barge){ if(!BARGE.on) return;
+    var r=0; for(var i=0;i<f.length;i++) r+=f[i]*f[i]; r=Math.sqrt(r/f.length);
+    BARGE.pre.push(f); if(BARGE.pre.length>5) BARGE.pre.shift();
+    if(r>Math.max(0.02,BARGE.echo*3)){ if(++BARGE.run>=3){ GL.barge=true; var pre=BARGE.pre; BARGE.pre=[]; BARGE.run=0; pre.forEach(glPcm); } return; }
+    BARGE.run=0; BARGE.echo=BARGE.echo*0.9+r*0.1; return; }
+  if(!glSpeaking()){ GL.barge=false; BARGE.run=0; BARGE.pre=[]; }
+  glPcm(f); }
+function glPcm(f){
   var b=new Int16Array(f.length); for(var i=0;i<f.length;i++){ var v=Math.max(-1,Math.min(1,f[i])); b[i]=v<0?v*32768:v*32767; }
   var u=new Uint8Array(b.buffer), s=''; for(var k=0;k<u.length;k+=4096) s+=String.fromCharCode.apply(null,u.subarray(k,k+4096));
   glSend({realtimeInput:{audio:{data:btoa(s),mimeType:'audio/pcm;rate=16000'}}}); }
 function glPlay(b64){ var ctx=GL.outCtx; if(!ctx||!sound) return; var bin=atob(b64), n=bin.length>>1, f=new Float32Array(n);
   for(var i=0;i<n;i++){ var v=bin.charCodeAt(2*i)|(bin.charCodeAt(2*i+1)<<8); if(v>=32768) v-=65536; f[i]=v/32768; }
-  var buf=ctx.createBuffer(1,n,24000); buf.copyToChannel(f,0); var s=ctx.createBufferSource(); s.buffer=buf; s.connect(ctx.destination);
+  var buf=ctx.createBuffer(1,n,24000); buf.copyToChannel(f,0); var s=ctx.createBufferSource(); s.buffer=buf; s.connect(GL.mix||ctx.destination);
   var at=Math.max(ctx.currentTime+0.04,GL.until); s.start(at); GL.until=at+buf.duration; GL.srcs.push(s); s.onended=function(){ var x=GL.srcs.indexOf(s); if(x>=0) GL.srcs.splice(x,1); }; }
 function glHushAudio(){ GL.srcs.forEach(function(s){ try{ s.stop(); }catch(e){} }); GL.srcs=[]; GL.until=0; }
 function glMsg(m){ var sc=m.serverContent;
-  if(m.toolCall){ var heard=GL.heard; glTools(m.toolCall.functionCalls||[],heard); }
+  if(m.toolCall){ var heard=GL.heard&&!(GL.overBot&&glEcho(GL.you)); glTools(m.toolCall.functionCalls||[],heard); }
   if(!sc) return;
   ((sc.modelTurn&&sc.modelTurn.parts)||[]).forEach(function(p){ if(p.inlineData&&p.inlineData.data) glPlay(p.inlineData.data); });
-  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
-  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.said=''; GL.newBot=false; GL.newYou=true; GL.heard=false; } GL.said+=sc.outputTranscription.text; setQ(GL.said.trim()); }
+  if(sc.inputTranscription&&sc.inputTranscription.text){ GL.heard=true; if(GL.newYou){ GL.you=''; GL.newYou=false; GL.overBot=glSpeaking()||GL.barge; } GL.you+=sc.inputTranscription.text; setYou(GL.you.trim()); }
+  if(sc.outputTranscription&&sc.outputTranscription.text){ if(GL.newBot){ GL.lastSaid=GL.said; GL.said=''; GL.newBot=false; GL.newYou=true; GL.heard=false; } GL.said+=sc.outputTranscription.text; setQ(GL.said.trim()); }
   if(sc.interrupted) glHushAudio();
   if(sc.turnComplete){ GL.newBot=true; if(GL.closeAfter) glCloseWhenQuiet(); } }
 function glCloseWhenQuiet(){ var n=0, iv=setInterval(function(){ if(!glSpeaking()||++n>100){ clearInterval(iv); glClose(); releaseMic(); } },100); }
@@ -1090,6 +1121,7 @@ $('#createBtn').onclick=openDemo; $('#closeBtn').onclick=closeAll; $('#doneClose
 $('#demoTog').onclick=function(){ var h=$('#demo').classList.toggle('hide'); this.classList.toggle('on',!h); this.setAttribute('aria-label',h?'Show demo controls':'Hide demo controls'); };
 if(params.has('demo')){ $('#demo').classList.remove('hide'); $('#demoTog').classList.add('on'); }
 $('#dAuto').onclick=function(){ autoAns=!autoAns; this.textContent='Auto-answer: '+(autoAns?'on':'off'); this.classList.toggle('on',autoAns); };
+$('#dBarge').onclick=function(){ BARGE.on=!BARGE.on; this.textContent='Interruptions: '+(BARGE.on?'on':'off'); this.classList.toggle('on',BARGE.on); };
 $('#dUser').onclick=function(){ speakAns=!speakAns; this.textContent='Speak answers: '+(speakAns?'on':'off'); this.classList.toggle('on',speakAns); };
 $('#dLive').onclick=function(){ setLive(!live); if(botOn&&!busy&&stage!=='intro') start(SCRIPT[stage]); else if(botOn&&stage==='intro') start(SCRIPT.intro); };
 function voiceOffQuiet(){ gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); }
@@ -1101,7 +1133,7 @@ function pingAi(){ if(location.protocol==='file:'){ aiDown=true; voiceOffQuiet()
 $('#dVoiceSel').onchange=function(){ var n=this.value, v=(synth?synth.getVoices():[]).filter(function(x){ return x.name===n; })[0]; if(!v) return; botVoice=v; try{ localStorage.setItem('va_voice',n); }catch(e){}
   gemVoice=false; $('#dVoice').textContent='Bot voice: browser'; $('#dVoice').classList.remove('on'); try{ synth.cancel(); var u=new SpeechSynthesisUtterance('Hello, I am your assistant builder.'); u.voice=v; u.lang=v.lang; synth.speak(u); }catch(e){} };
 $('#dVoice').onclick=function(){ gemVoice=!gemVoice; this.textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); this.classList.toggle('on',gemVoice); };
-setLive(live); $('#dVoice').textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); $('#dVoice').classList.toggle('on',gemVoice); pingAi(); pickVoices(); renderDash(); setStage('intro'); setOrb('idle');
+setLive(live); $('#dBarge').textContent='Interruptions: '+(BARGE.on?'on':'off'); $('#dBarge').classList.toggle('on',BARGE.on); $('#dVoice').textContent='Bot voice: '+(gemVoice?'Gemini':'browser'); $('#dVoice').classList.toggle('on',gemVoice); pingAi(); pickVoices(); renderDash(); setStage('intro'); setOrb('idle');
 })();
 </script>
 </body>
